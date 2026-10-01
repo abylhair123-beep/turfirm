@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  sapar-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sapar_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Sapar API
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=sqlite:///./sapar.db
+      - SECRET_KEY=sapar-production-secure-key-2026
+    volumes:
+      - ./data:/app/data

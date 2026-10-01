@@ -35,3 +35,4 @@ class Tour(Base):
     agency_rel = relationship("Agency", back_populates="tours")
     bookings = relationship("Booking", back_populates="tour", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="tour", cascade="all, delete-orphan")
+    favorites = relationship("Favorite", back_populates="tour", cascade="all, delete-orphan")

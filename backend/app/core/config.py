@@ -1,5 +1,5 @@
-from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from typing import List, Optional, Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,20 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./sapar.db"
     cors_origins: Union[List[str], str] = ["*"]
+
+    # --- Платежная система Kaspi Pay ---
+    # При указании реального KASPI_API_KEY и KASPI_MERCHANT_ID система
+    # автоматически начинает обращаться к боевому API Kaspi Pay.
+    kaspi_api_key: Optional[str] = None
+    kaspi_merchant_id: Optional[str] = None
+    kaspi_service_id: Optional[str] = None
+    kaspi_api_url: str = "https://kaspi.kz/api/v1"
+    kaspi_test_mode: bool = True
+    kaspi_webhook_secret: Optional[str] = None
+
+    # Другие провайдеры (Halyk Bank / Карта)
+    halyk_client_id: Optional[str] = None
+    halyk_client_secret: Optional[str] = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

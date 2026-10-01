@@ -22,3 +22,5 @@ class User(Base):
     agency = relationship("Agency", back_populates="user", uselist=False, cascade="all, delete-orphan")
     bookings = relationship("Booking", back_populates="user", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")

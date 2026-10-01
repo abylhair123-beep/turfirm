@@ -8,6 +8,8 @@ from app.auth.router import router as auth_router
 from app.bookings.router import router as bookings_router
 from app.core.config import settings
 from app.database import Base, SessionLocal, engine
+from app.favorites.router import router as favorites_router
+from app.payments.router import router as payments_router
 from app.reviews.router import router as reviews_router
 from app.seed import seed_data
 from app.tours.router import router as tours_router
@@ -28,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
-    description="Backend API для маркетплейса турагентств Sapar",
+    description="Backend API для маркетплейса турагентств Sapar с поддержкой Kaspi Pay",
     lifespan=lifespan,
 )
 
@@ -52,6 +54,8 @@ app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(agencies_router, prefix=settings.api_v1_prefix)
 app.include_router(tours_router, prefix=settings.api_v1_prefix)
 app.include_router(bookings_router, prefix=settings.api_v1_prefix)
+app.include_router(payments_router, prefix=settings.api_v1_prefix)
+app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
 
 
@@ -67,4 +71,5 @@ def health_check():
         "app": settings.app_name,
         "environment": settings.environment,
         "version": "1.0.0",
+        "payments": "Kaspi Pay / Card / Halyk",
     }

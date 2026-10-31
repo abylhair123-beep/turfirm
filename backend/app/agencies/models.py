@@ -20,6 +20,7 @@ class Agency(Base):
     rating = Column(Float, default=5.0, nullable=False)
     reviews_count = Column(Integer, default=0, nullable=False)
     logo_url = Column(String(500), nullable=True)
+    telegram_chat_id = Column(String(100), nullable=True)  # Чат/канал Telegram для уведомлений о бронях
     user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 

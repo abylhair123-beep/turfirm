@@ -36,6 +36,27 @@ class Settings(BaseSettings):
     halyk_client_id: Optional[str] = None
     halyk_client_secret: Optional[str] = None
 
+    # --- Уведомления о бронированиях ---
+    # Telegram-бот для уведомлений турагентствам.
+    # Получите токен у @BotFather и укажите TELEGRAM_BOT_TOKEN.
+    # TELEGRAM_CHAT_ID — глобальный чат по умолчанию (если у агентства не задан свой).
+    # Пока токен не указан, уведомления просто пишутся в лог (dev-режим).
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    telegram_api_url: str = "https://api.telegram.org"
+
+    # SMTP для писем клиентам. Если не настроен — письма пишутся в лог (dev-режим).
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None  # Адрес отправителя; по умолчанию = smtp_user
+    smtp_from_name: str = "Sapar"
+    smtp_use_tls: bool = True
+
+    # Публичное название сервиса для текстов уведомлений
+    public_app_name: str = "Sapar"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

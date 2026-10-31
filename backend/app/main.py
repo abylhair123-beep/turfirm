@@ -1,7 +1,17 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+
+# Логи приложения (в т.ч. dev-уведомления) выводим в консоль независимо от uvicorn
+_app_logger = logging.getLogger("app")
+if not _app_logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
+    _app_logger.addHandler(_handler)
+    _app_logger.setLevel(logging.INFO)
+    _app_logger.propagate = False
 
 from app.agencies.router import router as agencies_router
 from app.auth.router import router as auth_router
@@ -9,6 +19,7 @@ from app.bookings.router import router as bookings_router
 from app.core.config import settings
 from app.database import Base, SessionLocal, engine
 from app.favorites.router import router as favorites_router
+from app.notifications.router import router as notifications_router
 from app.payments.router import router as payments_router
 from app.reviews.router import router as reviews_router
 from app.seed import seed_data
@@ -55,6 +66,7 @@ app.include_router(agencies_router, prefix=settings.api_v1_prefix)
 app.include_router(tours_router, prefix=settings.api_v1_prefix)
 app.include_router(bookings_router, prefix=settings.api_v1_prefix)
 app.include_router(payments_router, prefix=settings.api_v1_prefix)
+app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
 

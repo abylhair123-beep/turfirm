@@ -1,15 +1,41 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.agencies.models import Agency
 from app.auth.models import User
 from app.bookings.models import Booking
 from app.bookings.schemas import BookingCreate, BookingResponse, BookingStatusUpdate
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_user_optional
+from app.notifications.service import (
+    BookingNotificationData,
+    notify_booking_status_change,
+    notify_new_booking,
+)
 from app.tours.models import Tour
 
 router = APIRouter(prefix="/bookings", tags=["Бронирования"])
+
+
+def _build_notification_data(db: Session, booking: Booking, tour: Tour) -> BookingNotificationData:
+    """Собрать снимок данных брони для уведомлений, пока сессия БД открыта."""
+    agency = db.query(Agency).filter(Agency.id == booking.agency_id).first()
+    return BookingNotificationData(
+        booking_id=booking.id,
+        status=booking.status,
+        tour_title=tour.title if tour else "—",
+        destination=tour.destination if tour else "—",
+        dates=tour.dates if tour else "—",
+        guests_count=booking.guests_count,
+        total_price=booking.total_price,
+        payment_method=booking.payment_method,
+        customer_name=booking.customer_name,
+        customer_phone=booking.customer_phone,
+        customer_email=booking.customer_email,
+        agency_name=agency.name if agency else "—",
+        agency_telegram_chat_id=agency.telegram_chat_id if agency else None,
+    )
 
 
 def _booking_to_response(b: Booking) -> BookingResponse:
@@ -33,6 +59,7 @@ def _booking_to_response(b: Booking) -> BookingResponse:
 @router.post("", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
 def create_booking(
     booking_in: BookingCreate,
+    background_tasks: BackgroundTasks,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
@@ -65,6 +92,11 @@ def create_booking(
     db.add(booking)
     db.commit()
     db.refresh(booking)
+
+    # Уведомления о новой брони (Telegram агентству + Email клиенту) — в фоне,
+    # чтобы ответ не тормозил и сбой отправки не ломал бронирование.
+    notification_data = _build_notification_data(db, booking, tour)
+    background_tasks.add_task(notify_new_booking, notification_data)
 
     return _booking_to_response(booking)
 
@@ -112,6 +144,7 @@ def get_booking(booking_id: str, db: Session = Depends(get_db)):
 def update_booking_status(
     booking_id: str,
     status_in: BookingStatusUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -123,7 +156,15 @@ def update_booking_status(
         if not current_user.agency or current_user.agency.id != booking.agency_id:
             raise HTTPException(status_code=403, detail="Нет прав на изменение статуса этого бронирования")
 
+    previous_status = booking.status
     booking.status = status_in.status
     db.commit()
     db.refresh(booking)
+
+    # Уведомляем клиента о смене статуса (только если статус реально изменился)
+    if previous_status != booking.status:
+        tour = db.query(Tour).filter(Tour.id == booking.tour_id).first()
+        notification_data = _build_notification_data(db, booking, tour)
+        background_tasks.add_task(notify_booking_status_change, notification_data)
+
     return _booking_to_response(booking)

@@ -19,7 +19,10 @@
 | **Поддержка сетевых фото** | ✅ Готово | Отображение сетевых фото через `Image.network(tour.photoUrl)` с плавным фоллбеком на брендовый цвет тура. |
 | **Сохранение онбординга** | ✅ Готово | Флаг `has_seen_onboarding` в `SharedPreferences` — экран онбординга показывается только 1 раз при первом запуске ([`lib/main.dart`](file:///home/aboka/Desktop/project/sapar/lib/main.dart)). |
 | **Кабинет турагентства (B2B)** | ✅ Готово | В профиле для роли `agency` доступна панель управления и экран создания нового тура ([`lib/screens/add_tour_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/add_tour_screen.dart)) через API `POST /api/v1/tours`. |
-| **Нижняя навигация (Табы)** | ✅ Готово | Переключение 4 вкладок: **Главная**, **Поиск**, **Брони**, **Профиль** ([`lib/screens/home_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/home_screen.dart)). |
+| **Нижняя навигация (Табы)** | ✅ Готово | Нативный `bottomNavigationBar` в `Scaffold` ([`lib/screens/home_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/home_screen.dart)): **Главная**, **Поиск**, **Брони**, **Профиль**. |
+| **CI/CD Pipeline** | ✅ Готово | GitHub Actions ([`.github/workflows/ci.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/ci.yml) & [`.github/workflows/cd.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/cd.yml)) — автоматический прогон тестов pytest, flutter analyze/test, сборка Web и Docker. |
+| **Тестовое покрытие** | ✅ Готово | 13 тестов FastAPI backend (`pytest`) + 7 тестов Flutter (`flutter test` в [`test/`](file:///home/aboka/Desktop/project/sapar/test)). |
+| **Git & Репозиторий** | ✅ Готово | Все доработки закоммичены в ветку `main` (коммит `2528c87`), настроены `.gitignore` и `backend/.dockerignore`. |
 
 ---
 

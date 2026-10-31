@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
 import '../widgets/icon_circle_button.dart';
+import '../widgets/kaspi_qr_sheet.dart';
 import '../widgets/primary_button.dart';
 import 'success_screen.dart';
 
@@ -37,9 +38,10 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: 'Айгерим Сериковна');
-    _phoneController = TextEditingController(text: '+7 701 234 56 78');
-    _emailController = TextEditingController(text: 'aigerim@mail.kz');
+    final u = ApiService.currentUser;
+    _nameController = TextEditingController(text: u?.fullName.isNotEmpty == true ? u!.fullName : 'Айгерим Сериковна');
+    _phoneController = TextEditingController(text: u?.phone?.isNotEmpty == true ? u!.phone! : '+7 701 234 56 78');
+    _emailController = TextEditingController(text: u?.email.isNotEmpty == true ? u!.email : 'aigerim@mail.kz');
   }
 
   @override
@@ -71,16 +73,47 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      final method = _paymentMethods[_paymentIndex];
       final req = BookingRequest(
         tourId: widget.tour.id,
         customerName: _nameController.text.trim(),
         customerPhone: _phoneController.text.trim(),
         customerEmail: _emailController.text.trim(),
         guestsCount: _guests,
-        paymentMethod: _paymentMethods[_paymentIndex],
+        paymentMethod: method,
       );
 
       final result = await ApiService.createBooking(req);
+
+      // Если выбран Kaspi Pay — показываем интерактивный QR код
+      if (method == 'Kaspi Pay' && mounted) {
+        final paymentData = await ApiService.initiatePayment(
+          bookingId: result.id,
+          paymentMethod: method,
+          customerPhone: req.customerPhone,
+          customerEmail: req.customerEmail,
+          customerName: req.customerName,
+        );
+
+        if (paymentData != null && mounted) {
+          setState(() => _isSubmitting = false);
+          await KaspiQrSheet.show(
+            context: context,
+            payment: paymentData,
+            onPaymentSuccess: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => SuccessScreen(
+                    bookingId: result.id,
+                    email: result.customerEmail.isNotEmpty ? result.customerEmail : 'aigerim@mail.kz',
+                  ),
+                ),
+              );
+            },
+          );
+          return;
+        }
+      }
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -142,103 +175,69 @@ class _BookingScreenState extends State<BookingScreen> {
                             color: tour.photoColor,
                             borderRadius: BorderRadius.circular(10),
                           ),
+                          clipBehavior: Clip.antiAlias,
+                          child: tour.photoUrl != null && tour.photoUrl!.isNotEmpty
+                              ? Image.network(
+                                  tour.photoUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const SizedBox(),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(tour.destination, style: AppText.h4.copyWith(fontSize: 14.5)),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${tour.agency} · ${tour.dates}, ${tour.nights}',
-                                style: AppText.work(size: 12.5, color: AppColors.muted),
-                              ),
+                              Text(tour.title, style: AppText.h4),
+                              const SizedBox(height: 3),
+                              Text('${tour.dates} · ${tour.nights}', style: AppText.caption),
                             ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const _Label('КОЛИЧЕСТВО ГОСТЕЙ'),
+                  const SizedBox(height: 18),
+                  Text('Количество туристов', style: AppText.h4),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border, width: 1.4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Взрослые', style: AppText.work(size: 14, weight: FontWeight.w600)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Взрослые', style: AppText.work(size: 14, weight: FontWeight.w600)),
+                            Text('от 12 лет и старше', style: AppText.caption),
+                          ],
+                        ),
                         Row(
                           children: [
-                            _StepButton(
-                              icon: AppIcons.minus,
-                              filled: false,
-                              onTap: _guests > 1 ? () => setState(() => _guests--) : null,
+                            _counterBtn(Icons.remove, () {
+                              if (_guests > 1) setState(() => _guests--);
+                            }),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              child: Text('$_guests', style: AppText.h4),
                             ),
-                            SizedBox(
-                              width: 28,
-                              child: Text('$_guests', textAlign: TextAlign.center, style: AppText.work(size: 15, weight: FontWeight.w700)),
-                            ),
-                            _StepButton(
-                              icon: AppIcons.plus,
-                              filled: true,
-                              onTap: () => setState(() => _guests++),
-                            ),
+                            _counterBtn(Icons.add, () => setState(() => _guests++)),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const _Label('КОНТАКТНЫЕ ДАННЫЕ'),
-                  const SizedBox(height: 8),
-                  _EditableField(
-                    controller: _nameController,
-                    hint: 'ФИО туриста',
-                    icon: Icons.person_outline,
-                  ),
-                  const SizedBox(height: 10),
-                  _EditableField(
-                    controller: _phoneController,
-                    hint: 'Телефон',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 10),
-                  _EditableField(
-                    controller: _emailController,
-                    hint: 'Email',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 20),
-                  const _Label('СПОСОБ ОПЛАТЫ'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      for (final (i, label) in _paymentMethods.indexed) ...[
-                        if (i > 0) const SizedBox(width: 8),
-                        Expanded(
-                          child: _PayChip(
-                            label: label,
-                            active: _paymentIndex == i,
-                            onTap: () => setState(() => _paymentIndex = i),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const _Label('К ОПЛАТЕ'),
+                  const SizedBox(height: 18),
+                  Text('Контактные данные', style: AppText.h4),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
@@ -246,23 +245,97 @@ class _BookingScreenState extends State<BookingScreen> {
                     ),
                     child: Column(
                       children: [
-                        _priceRow('Тур ($_guests чел.)', _fmt(_tourTotal)),
-                        _priceRow('Сервисный сбор', _fmt(_serviceFee)),
+                        _textField('Имя и фамилия', _nameController, Icons.person_outline),
                         const Divider(height: 20, color: AppColors.border),
-                        _priceRow('Итого', _fmt(_total), big: true),
-                        const SizedBox(height: 8),
+                        _textField('Телефон для связи', _phoneController, Icons.phone_outlined),
+                        const Divider(height: 20, color: AppColors.border),
+                        _textField('Электронная почта', _emailController, Icons.email_outlined),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
+                  Text('Способ оплаты', style: AppText.h4),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      for (var i = 0; i < _paymentMethods.length; i++)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: i < _paymentMethods.length - 1 ? 8 : 0),
+                            child: GestureDetector(
+                              onTap: () => setState(() => _paymentIndex = i),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _paymentIndex == i ? AppColors.teal.withValues(alpha: 0.08) : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _paymentIndex == i ? AppColors.teal : AppColors.border,
+                                    width: _paymentIndex == i ? 1.8 : 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  _paymentMethods[i],
+                                  textAlign: TextAlign.center,
+                                  style: AppText.work(
+                                    size: 13,
+                                    weight: _paymentIndex == i ? FontWeight.w600 : FontWeight.w500,
+                                    color: _paymentIndex == i ? AppColors.teal : AppColors.ink,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text('Детализация стоимости', style: AppText.h4),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        _priceRow('Тур (${_fmt(tour.priceFrom)} × $_guests)', _fmt(_tourTotal)),
+                        const SizedBox(height: 8),
+                        _priceRow('Сервисный сбор платформы', _fmt(_serviceFee)),
+                        const Divider(height: 20, color: AppColors.border),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Итого к оплате', style: AppText.h4),
+                            Text(
+                              _fmt(_total),
+                              style: AppText.sora(size: 18, weight: FontWeight.w700, color: AppColors.teal),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
               child: PrimaryButton(
-                label: _isSubmitting ? 'Обработка платежа...' : 'Оплатить ${_fmt(_total)}',
-                onPressed: _isSubmitting ? null : _handlePayment,
+                title: _isSubmitting
+                    ? 'Оформление...'
+                    : _paymentMethods[_paymentIndex] == 'Kaspi Pay'
+                        ? 'Оплатить через Kaspi Pay (${_fmt(_total)})'
+                        : 'Оплатить ${_fmt(_total)}',
+                isLoading: _isSubmitting,
+                onTap: _handlePayment,
               ),
             ),
           ],
@@ -271,138 +344,51 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _priceRow(String label, String value, {bool big = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: big
-                ? AppText.sora(size: 15, weight: FontWeight.w700)
-                : AppText.work(size: 14, color: AppColors.muted),
-          ),
-          Text(
-            value,
-            style: big
-                ? AppText.sora(size: 16, weight: FontWeight.w800, color: AppColors.teal)
-                : AppText.work(size: 14),
-          ),
-        ],
+  Widget _counterBtn(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 18, color: AppColors.ink),
       ),
     );
   }
-}
 
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(text, style: AppText.label);
-}
-
-class _EditableField extends StatelessWidget {
-  const _EditableField({
-    required this.controller,
-    required this.hint,
-    required this.icon,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final IconData icon;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border, width: 1.4),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.muted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType: keyboardType,
-              style: AppText.work(size: 14, weight: FontWeight.w500),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: AppText.work(size: 14, color: AppColors.mutedLight),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 11),
-              ),
+  Widget _textField(String hint, TextEditingController ctrl, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.muted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextField(
+            controller: ctrl,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: AppText.work(size: 13.5, color: AppColors.mutedLight),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.filled, required this.onTap});
-  final String icon;
-  final bool filled;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: IconCircleButton(
-        svg: icon,
-        size: 30,
-        background: filled ? AppColors.teal : Colors.white,
-        iconColor: filled ? Colors.white : AppColors.ink,
-        border: filled ? null : AppColors.border,
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _PayChip extends StatelessWidget {
-  const _PayChip({required this.label, required this.active, required this.onTap});
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: active ? AppColors.teal : Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: active ? null : Border.all(color: AppColors.border, width: 1.4),
-          ),
-          child: Column(
-            children: [
-              AppIcon(AppIcons.card, size: 18, color: active ? Colors.white : AppColors.ink),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: AppText.work(size: 12.5, weight: FontWeight.w600, color: active ? Colors.white : AppColors.ink),
-              ),
-            ],
+            style: AppText.work(size: 14, color: AppColors.ink),
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _priceRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppText.work(size: 13, color: AppColors.muted)),
+        Text(value, style: AppText.work(size: 13.5, weight: FontWeight.w600, color: AppColors.ink)),
+      ],
     );
   }
 }

@@ -7,6 +7,10 @@ import '../widgets/app_icon.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/icon_circle_button.dart';
 import '../widgets/tour_card.dart';
+import 'bookings_list_screen.dart';
+import 'favorites_screen.dart';
+import 'profile_screen.dart';
+import 'search_screen.dart';
 import 'tour_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,6 +22,47 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tabIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: _buildCurrentTab(),
+      ),
+      bottomNavigationBar: _BottomTabBar(
+        index: _tabIndex,
+        onChanged: (i) => setState(() => _tabIndex = i),
+      ),
+    );
+  }
+
+  Widget _buildCurrentTab() {
+    switch (_tabIndex) {
+      case 1:
+        return const SearchScreen();
+      case 2:
+        return const BookingsListScreen();
+      case 3:
+        return const ProfileScreen();
+      default:
+        return _HomeCatalogTab(
+          onOpenSearch: () => setState(() => _tabIndex = 1),
+        );
+    }
+  }
+}
+
+class _HomeCatalogTab extends StatefulWidget {
+  const _HomeCatalogTab({required this.onOpenSearch});
+
+  final VoidCallback onOpenSearch;
+
+  @override
+  State<_HomeCatalogTab> createState() => _HomeCatalogTabState();
+}
+
+class _HomeCatalogTabState extends State<_HomeCatalogTab> {
   String _activeCategory = 'Пляжный отдых';
   List<Tour> _tours = mockTours;
   bool _isLoading = false;
@@ -71,146 +116,169 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Column(
+    return RefreshIndicator(
+      onRefresh: _loadTours,
+      color: AppColors.teal,
+      child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           children: [
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _loadTours,
-                color: AppColors.teal,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                  children: [
-                    _TopBar(),
-                    const SizedBox(height: 16),
-                    _SearchBar(
-                      controller: _searchController,
-                      onChanged: (val) {
-                        _loadTours();
-                      },
-                      onSubmitted: (_) => _loadTours(),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 40,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _categories.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, i) {
-                          final label = _categories[i];
-                          return CategoryChip(
-                            label: label,
-                            active: label == _activeCategory,
-                            onTap: () => _onCategorySelected(label),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const _PromoBanner(),
-                    const SizedBox(height: 22),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Популярные туры', style: AppText.h3),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _activeCategory = 'Все';
-                              _searchController.clear();
-                            });
-                            _loadTours();
-                          },
-                          child: Text(
-                            'Все туры ›',
-                            style: AppText.work(
-                              size: 13.5,
-                              weight: FontWeight.w600,
-                              color: AppColors.teal,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (_isLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: CircularProgressIndicator(color: AppColors.teal),
-                        ),
-                      )
-                    else if (_tours.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: Text(
-                            'Туры не найдены',
-                            style: AppText.work(size: 15, color: AppColors.muted),
-                          ),
-                        ),
-                      )
-                    else
-                      for (final tour in _tours) ...[
-                        TourCard(
-                          tour: tour,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TourDetailScreen(tour: tour),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                  ],
-                ),
+            _TopBar(),
+            const SizedBox(height: 16),
+            _SearchBar(
+              controller: _searchController,
+              onChanged: (val) {
+                _loadTours();
+              },
+              onSubmitted: (_) => _loadTours(),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _categories.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final label = _categories[i];
+                  return CategoryChip(
+                    label: label,
+                    active: label == _activeCategory,
+                    onTap: () => _onCategorySelected(label),
+                  );
+                },
               ),
             ),
-            _BottomTabBar(
-              index: _tabIndex,
-              onChanged: (i) => setState(() => _tabIndex = i),
+            const SizedBox(height: 18),
+            const _PromoBanner(),
+            const SizedBox(height: 22),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Популярные туры', style: AppText.h3),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _activeCategory = 'Все';
+                      _searchController.clear();
+                    });
+                    _loadTours();
+                  },
+                  child: Text(
+                    'Все туры ›',
+                    style: AppText.work(
+                      size: 13.5,
+                      weight: FontWeight.w600,
+                      color: AppColors.teal,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator(color: AppColors.teal)),
+              )
+            else if (_tours.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Column(
+                    children: [
+                      const Icon(Icons.search_off_rounded, size: 48, color: AppColors.mutedLight),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Туров по этой категории не найдено',
+                        style: AppText.work(size: 14, color: AppColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              for (final tour in _tours)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: TourCard(
+                    tour: tour,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => TourDetailScreen(tour: tour),
+                        ),
+                      );
+                    },
+                  ),
+                ),
           ],
         ),
-      ),
-    );
+      );
   }
 }
 
 class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
+    return ValueListenableBuilder(
+      valueListenable: ApiService.userNotifier,
+      builder: (context, user, _) {
+        final displayName = user?.fullName.isNotEmpty == true ? user!.fullName.split(' ').first : 'Асем';
+        final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'А';
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.teal,
-              child: Text('А', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                Text('Здравствуйте, Асем', style: AppText.work(size: 13, color: AppColors.muted)),
-                Text('Куда полетим?', style: AppText.h4.copyWith(fontSize: 16)),
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppColors.teal,
+                  child: Text(
+                    initial,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Здравствуйте, $displayName', style: AppText.work(size: 13, color: AppColors.muted)),
+                    Text('Куда полетим?', style: AppText.h4.copyWith(fontSize: 16)),
+                  ],
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                IconCircleButton(
+                  svg: AppIcons.heart,
+                  background: Colors.white,
+                  border: AppColors.border,
+                  iconColor: const Color(0xFFE53935),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                IconCircleButton(
+                  svg: AppIcons.bell,
+                  background: Colors.white,
+                  border: AppColors.border,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Новых уведомлений нет')),
+                    );
+                  },
+                ),
               ],
             ),
           ],
-        ),
-        IconCircleButton(
-          svg: AppIcons.bell,
-          background: Colors.white,
-          border: AppColors.border,
-          onTap: () {},
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -336,6 +404,7 @@ class _BottomTabBar extends StatelessWidget {
               onTap: () => onChanged(i),
               behavior: HitTestBehavior.opaque,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   AppIcon(
                     _tabs[i].$1,

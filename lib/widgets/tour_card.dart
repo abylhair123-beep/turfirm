@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/tour.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'app_icon.dart';
@@ -32,7 +33,15 @@ class TourCard extends StatelessWidget {
                 height: 150,
                 child: Stack(
                   children: [
-                    Container(color: tour.photoColor),
+                    Positioned.fill(
+                      child: tour.photoUrl != null && tour.photoUrl!.isNotEmpty
+                          ? Image.network(
+                              tour.photoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(color: tour.photoColor),
+                            )
+                          : Container(color: tour.photoColor),
+                    ),
                     Positioned(
                       top: 12,
                       left: 12,
@@ -45,16 +54,33 @@ class TourCard extends StatelessWidget {
                     Positioned(
                       right: 10,
                       top: 10,
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: AppColors.ink.withValues(alpha: 0.4),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: AppIcon(AppIcons.heart, size: 15, color: Colors.white),
-                        ),
+                      child: ValueListenableBuilder<Set<String>>(
+                        valueListenable: ApiService.favoritesNotifier,
+                        builder: (context, favs, _) {
+                          final isFav = favs.contains(tour.id);
+                          return GestureDetector(
+                            onTap: () {
+                              ApiService.toggleFavorite(tour.id);
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isFav
+                                    ? Colors.white
+                                    : AppColors.ink.withValues(alpha: 0.4),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                  size: 17,
+                                  color: isFav ? const Color(0xFFE53935) : Colors.white,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     Positioned(

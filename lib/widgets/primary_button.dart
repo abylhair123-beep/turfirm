@@ -9,16 +9,21 @@ enum ButtonVariant { coral, teal, white }
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
-    required this.label,
-    required this.onPressed,
+    String? label,
+    String? title,
+    VoidCallback? onPressed,
+    VoidCallback? onTap,
     this.variant = ButtonVariant.coral,
     this.trailingIcon,
-  });
+    this.isLoading = false,
+  })  : label = label ?? title ?? '',
+        onPressed = onPressed ?? onTap;
 
   final String label;
   final VoidCallback? onPressed;
   final ButtonVariant variant;
   final Widget? trailingIcon;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -43,16 +48,27 @@ class PrimaryButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: onPressed,
+        onTap: isLoading ? null : onPressed,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(label, style: AppText.sora(size: 16, color: fg)),
-              if (trailingIcon != null) ...[
-                const SizedBox(width: 8),
-                trailingIcon!,
+              if (isLoading)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    valueColor: AlwaysStoppedAnimation<Color>(fg),
+                  ),
+                )
+              else ...[
+                Text(label, style: AppText.sora(size: 16, color: fg)),
+                if (trailingIcon != null) ...[
+                  const SizedBox(width: 8),
+                  trailingIcon!,
+                ],
               ],
             ],
           ),

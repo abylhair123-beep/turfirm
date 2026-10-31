@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
@@ -91,6 +92,7 @@ class OnboardingScreen extends StatelessWidget {
   }
 
   void _goHome(BuildContext context) {
+    ApiService.markOnboardingSeen();
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );

@@ -24,6 +24,7 @@
 | **Telegram & Email рассылки** | Backend | Модуль уведомлений турагентств в Telegram и отправка квитанций на Email ([`backend/app/notifications/`](file:///home/aboka/Desktop/project/sapar/backend/app/notifications)). |
 | **Кабинет турагентства (B2B)** | Client / Backend | Создание тура с выбором фото из галереи, параметрами и выгрузкой в каталог ([`lib/screens/create_tour_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/create_tour_screen.dart)). |
 | **CI/CD Автоматизация** | DevOps | GitHub Actions workflows ([`.github/workflows/ci.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/ci.yml) & [`cd.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/cd.yml)). |
+| **PostgreSQL 16 & Docker** | Backend / DevOps | База переведена на PostgreSQL 16 (docker-compose с healthcheck и томом данных), драйвер `psycopg2-binary`. |
 | **Тестовое покрытие** | QA | 13 тестов `pytest` (бэкенд) + 7 тестов `flutter test` (фронтенд) — 100% успех. |
 
 ---
@@ -73,12 +74,12 @@
   - [ ] Интеграция SMS-шлюза (Mobizon / KazInfoTech / Twilio) с отправкой 4-значного OTP-кода.
 
 ### 🛡️ Эпик 5: Инфраструктура, Безопасность и Масштабирование (DevOps)
-- [ ] **Миграция БД на PostgreSQL:**
-  - [ ] Развертывание PostgreSQL 16 в Docker (`docker-compose.yml`).
-  - [ ] Подключение пула соединений SQLAlchemy `asyncpg` / `psycopg2`.
-  - [ ] Настройка резервного копирования БД (`pg_dump` по расписанию в S3).
-- [ ] **Кэширование каталога в Redis:**
-  - [ ] Кэширование популярных туров и категорий на 5–15 минут для снятия нагрузки с БД при высоком трафике.
+- [x] **Миграция БД на PostgreSQL (Выполнено):**
+  - [x] Развертывание PostgreSQL 16 в Docker ([`backend/docker-compose.yml`](file:///home/aboka/Desktop/project/sapar/backend/docker-compose.yml)).
+  - [x] Подключение пула соединений SQLAlchemy с `pool_pre_ping=True` и драйвером `psycopg2-binary`.
+- [ ] **Резервное копирование и кэширование:**
+  - [ ] Настройка бэкапов БД (`pg_dump` по расписанию в S3).
+  - [ ] Кэширование популярных туров и категорий в Redis (5–15 минут).
 - [ ] **Защита и безопасность API:**
   - [ ] Ограничение частоты запросов (Rate Limiting) через `slowapi` (защита от брутфорса и парсинга).
   - [ ] Мониторинг ошибок в реальном времени через Sentry (FastAPI + Flutter).

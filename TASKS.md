@@ -1,62 +1,129 @@
-# 📋 Дорожная карта и статус задач проекта Sapar
+# 📋 Дорожная карта и трекер задач проекта SAPAR (Backlog & Roadmap)
 
-> **Проект:** Sapar — маркетплейс туров от турагентств Казахстана  
-> **Расположение проекта на компьютере:** `/home/aboka/Desktop/project/sapar` (Рабочий стол -> `project` -> `sapar`)  
-> **Стек:** Flutter (клиентское приложение) + FastAPI & SQLAlchemy 2.0 (REST API бэкенд) + SQLite / PostgreSQL  
+> **Проект:** Sapar — национальный маркетплейс пакетных и авторских туров от турагентств Казахстана.  
+> **Локальный путь:** `/home/aboka/Рабочий стол/project/sapar` (зеркало: `/home/aboka/Desktop/project/sapar`)  
+> **Репозиторий:** `https://github.com/abylhair123-beep/turfirm.git` (ветка `main`)  
+> **Стек:** Flutter 3 (Web, Android, iOS) + FastAPI & SQLAlchemy 2.0 (REST API) + SQLite / PostgreSQL  
 
 ---
 
-## 🟢 1. ВЫПОЛНЕНО (Наша часть — 100% готово в коде)
+## 🟢 1. ВЫПОЛНЕНО (MVP v1.0 — Ветка `main`)
 
-| Задача | Статус | Реализация и файлы |
+Все базовые компоненты реализованы, протестированы, объединены и запушены в удаленный репозиторий:
+
+| Задача | Модуль | Описание и реализация |
 |---|:---:|---|
-| **Авторизация и сессия** | ✅ Готово | Экран входа и регистрации ([`lib/screens/auth_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/auth_screen.dart)), сохранение JWT в `shared_preferences`, автоматическая подстановка данных пользователя при бронировании ([`lib/screens/booking_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/booking_screen.dart)). |
-| **Экран «Мои бронирования»** | ✅ Готово | Экран списка поездок ([`lib/screens/bookings_list_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/bookings_list_screen.dart)), получение данных с бэкенда `GET /api/v1/bookings`, бейджи статусов, кнопка отзыва. |
-| **Интерактивный Kaspi QR** | ✅ Готово | Модальный боттомшит с QR-кодом ([`lib/widgets/kaspi_qr_sheet.dart`](file:///home/aboka/Desktop/project/sapar/lib/widgets/kaspi_qr_sheet.dart)), генерация QR через `qr_flutter`, диплинк и подтверждение оплаты. |
-| **Избранное (Favorites)** | ✅ Готово | Интерактивные сердечки в карточках ([`lib/widgets/tour_card.dart`](file:///home/aboka/Desktop/project/sapar/lib/widgets/tour_card.dart)) и экране тура ([`lib/screens/tour_detail_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/tour_detail_screen.dart)), отдельный экран списка избранного ([`lib/screens/favorites_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/favorites_screen.dart)). |
-| **Отзывы о турах (Reviews)** | ✅ Готово | Отображение реальных отзывов с бэкенда, форма оценки со звездами (1–5) и текстом (`POST /api/v1/reviews`). |
-| **Поиск и фильтрация** | ✅ Готово | Экран поиска ([`lib/screens/search_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/search_screen.dart)) с фильтрами по городам вылета (Алматы, Астана, Шымкент) и бюджету. |
-| **Поддержка сетевых фото** | ✅ Готово | Отображение сетевых фото через `Image.network(tour.photoUrl)` с плавным фоллбеком на брендовый цвет тура. |
-| **Сохранение онбординга** | ✅ Готово | Флаг `has_seen_onboarding` в `SharedPreferences` — экран онбординга показывается только 1 раз при первом запуске ([`lib/main.dart`](file:///home/aboka/Desktop/project/sapar/lib/main.dart)). |
-| **Кабинет турагентства (B2B)** | ✅ Готово | В профиле для роли `agency` доступна панель управления и экран создания нового тура ([`lib/screens/add_tour_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/add_tour_screen.dart)) через API `POST /api/v1/tours`. |
-| **Нижняя навигация (Табы)** | ✅ Готово | Нативный `bottomNavigationBar` в `Scaffold` ([`lib/screens/home_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/home_screen.dart)): **Главная**, **Поиск**, **Брони**, **Профиль**. |
-| **CI/CD Pipeline** | ✅ Готово | GitHub Actions ([`.github/workflows/ci.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/ci.yml) & [`.github/workflows/cd.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/cd.yml)) — автоматический прогон тестов pytest, flutter analyze/test, сборка Web и Docker. |
-| **Тестовое покрытие** | ✅ Готово | 13 тестов FastAPI backend (`pytest`) + 7 тестов Flutter (`flutter test` в [`test/`](file:///home/aboka/Desktop/project/sapar/test)). |
-| **Git & Репозиторий** | ✅ Готово | Все доработки закоммичены в ветку `main` (коммит `2528c87`), настроены `.gitignore` и `backend/.dockerignore`. |
+| **Авторизация и JWT** | Client / Backend | Экран входа/регистрации ([`lib/screens/auth_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/auth_screen.dart)), сохранение JWT в `shared_preferences`, роли `client`, `agency`, `admin`. |
+| **Каталог и поиск туров** | Client / Backend | Фильтрация по 5 категориям, городам вылета (Алматы, Астана, Шымкент), бюджету и текстовый поиск ([`lib/screens/search_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/search_screen.dart)). |
+| **Оформление бронирования** | Client / Backend | Расчет стоимости (туродень * гости + сервисный сбор 9 800 ₸), сохранение брони в БД ([`lib/screens/booking_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/booking_screen.dart)). |
+| **Платежи Kaspi Pay (QR)** | Client / Backend | Генерация Kaspi QR через `qr_flutter`, диплинки, эмуляция подтверждения и вебхук ([`lib/widgets/kaspi_qr_sheet.dart`](file:///home/aboka/Desktop/project/sapar/lib/widgets/kaspi_qr_sheet.dart)). |
+| **Экран «Мои бронирования»** | Client | Список поездок со статусами (`paid`, `confirmed`, `pending`), деталями и кнопкой отзыва ([`lib/screens/bookings_list_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/bookings_list_screen.dart)). |
+| **Избранное (Favorites)** | Client / Backend | Интерактивные сердечки в карточках и отдельный экран любимых туров ([`lib/screens/favorites_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/favorites_screen.dart)). |
+| **Отзывы и рейтинги** | Client / Backend | Просмотр отзывов других туристов, отправка оценки 1–5 со звездами и комментарием (`POST /api/v1/reviews`). |
+| **Медиа-хранилище (Storage)** | Backend | S3 / MinIO и локальный upload изображений с валидацией расширений ([`backend/app/storage/`](file:///home/aboka/Desktop/project/sapar/backend/app/storage)). |
+| **Telegram & Email рассылки** | Backend | Модуль уведомлений турагентств в Telegram и отправка квитанций на Email ([`backend/app/notifications/`](file:///home/aboka/Desktop/project/sapar/backend/app/notifications)). |
+| **Кабинет турагентства (B2B)** | Client / Backend | Создание тура с выбором фото из галереи, параметрами и выгрузкой в каталог ([`lib/screens/create_tour_screen.dart`](file:///home/aboka/Desktop/project/sapar/lib/screens/create_tour_screen.dart)). |
+| **CI/CD Автоматизация** | DevOps | GitHub Actions workflows ([`.github/workflows/ci.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/ci.yml) & [`cd.yml`](file:///home/aboka/Desktop/project/sapar/.github/workflows/cd.yml)). |
+| **Тестовое покрытие** | QA | 13 тестов `pytest` (бэкенд) + 7 тестов `flutter test` (фронтенд) — 100% успех. |
 
 ---
 
-## 🟡 2. ЗАДАЧИ ВТОРОГО РАЗРАБОТЧИКА (В работе)
+## 🎯 2. БЭКЛОГ ЗАДАЧ ПО НАПРАВЛЕНИЯМ (Sprint Backlog)
 
-1. **🔔 Уведомления:**
-   - [ ] Создание Telegram-бота для турагентств (отправка мгновенных оповещений при создании новой брони с контактами туриста и суммой).
-   - [ ] Отправка электронного ваучера и билета на Email клиента после оплаты.
-2. **🖼️ Хранилище медиа-файлов:**
-   - [ ] Эндпоинт `POST /api/v1/tours/{id}/upload-photo` для загрузки изображений отелей (S3 / MinIO / локальный static upload).
+### 💳 Эпик 1: Платежные системы и Финтех (Payments & Fintech)
+- [ ] **Боевой Kaspi Pay API:**
+  - [ ] Замена тестового режима на боевой `KASPI_TEST_MODE=false`.
+  - [ ] Реализация криптографической подписи вебхуков Kaspi через HMAC-SHA256 (`KASPI_WEBHOOK_SECRET`).
+  - [ ] Обработка частичных и полных возвратов (Refund API) при отмене бронирования.
+- [ ] **Эквайринг банковских карт (Halyk E-Pay / CloudPayments):**
+  - [ ] Интеграция шлюза для оплаты картами Visa/MasterCard туристов без Kaspi.
+  - [ ] Сохранение маски карты для повторных оплат.
+- [ ] **Фискализация (ОФД / Webkassa):**
+  - [ ] Автоматическая отправка фискального чека на email клиента после успешной оплаты.
+
+### 📱 Эпик 2: Мобильное приложение и UX (Mobile Client)
+- [ ] **Android сборка:**
+  - [ ] Подготовка Keystore и signing конфигурации (`key.properties`).
+  - [ ] Сборка Release Bundle: `flutter build appbundle --release` для публикации в Google Play Store.
+- [ ] **Push-уведомления (Firebase Cloud Messaging):**
+  - [ ] Подключение `firebase_core` и `firebase_messaging`.
+  - [ ] Мгновенные пуши клиенту при подтверждении тура агентством или изменении статуса рейса.
+- [ ] **Локализация (Qazaqsha / Русский / English):**
+  - [ ] Подключение `flutter_localizations` и генерации `.arb` файлов.
+  - [ ] Переключатель языка интерфейса в профиле пользователя.
+- [ ] **Галерея фотографий тура:**
+  - [ ] Поддержка списка фотографий (`List<String> photoUrls`) вместо одной.
+  - [ ] Полноэкранный слайдер с зумом на детальной странице тура.
+
+### 🏢 Эпик 3: Портал турагентств и B2B кабинет (Agency Dashboard)
+- [ ] **Управление турами агентства:**
+  - [ ] Экран «Мои туры» с возможностью редактирования цен, дат и описания (`PUT /api/v1/tours/{id}`).
+  - [ ] Кнопка быстрой паузы/снятия тура с продажи (`is_active = false`).
+- [ ] **Управление туристами и заявками:**
+  - [ ] Канбан/список бронирований агентства со сменой статусов: `Новая` ➔ `Подтверждена` ➔ `Выдан ваучер` ➔ `Завершена`.
+  - [ ] Выгрузка списка туристов в Excel (XLSX) для подачи списков в авиакомпании.
+- [ ] **Аналитическая панель:**
+  - [ ] График продаж за неделю/месяц, сумма комиссионного вознаграждения, средний чек.
+
+### 📄 Эпик 4: Документооборот и Клиентский сервис (Vouchers & Docs)
+- [ ] **Генерация PDF-ваучера поездки:**
+  - [ ] Эндпоинт `GET /api/v1/bookings/{id}/voucher.pdf` (генерация через `WeasyPrint` или `ReportLab`).
+  - [ ] Включение в ваучер QR-кода проверки подлинности, контактных данных отеля, времени трансфера и страховки.
+- [ ] **Авторизация по номеру телефона через SMS:**
+  - [ ] Интеграция SMS-шлюза (Mobizon / KazInfoTech / Twilio) с отправкой 4-значного OTP-кода.
+
+### 🛡️ Эпик 5: Инфраструктура, Безопасность и Масштабирование (DevOps)
+- [ ] **Миграция БД на PostgreSQL:**
+  - [ ] Развертывание PostgreSQL 16 в Docker (`docker-compose.yml`).
+  - [ ] Подключение пула соединений SQLAlchemy `asyncpg` / `psycopg2`.
+  - [ ] Настройка резервного копирования БД (`pg_dump` по расписанию в S3).
+- [ ] **Кэширование каталога в Redis:**
+  - [ ] Кэширование популярных туров и категорий на 5–15 минут для снятия нагрузки с БД при высоком трафике.
+- [ ] **Защита и безопасность API:**
+  - [ ] Ограничение частоты запросов (Rate Limiting) через `slowapi` (защита от брутфорса и парсинга).
+  - [ ] Мониторинг ошибок в реальном времени через Sentry (FastAPI + Flutter).
 
 ---
 
-## 🔵 3. ШАГИ ДЛЯ ВЫХОДА В БОЕВОЙ ПРОДАКШН (Production)
+## 🗓️ 3. ПЛАН СПРИНТОВ (Roadmap Releases)
 
-- [ ] Перенос базы данных с SQLite на **PostgreSQL** (шаблон уже готов в [`backend/docker-compose.yml`](file:///home/aboka/Desktop/project/sapar/backend/docker-compose.yml)).
-- [ ] Переключение ключей Kaspi Pay с Sandbox на боевые учетные данные (`KASPI_TEST_MODE=false`, `KASPI_API_KEY`, `KASPI_MERCHANT_ID`).
-- [ ] Сборка APK для Android (`flutter build apk --release`).
-
----
-
-## 🚀 Инструкция по запуску из папки `/home/aboka/Desktop/project/sapar`
-
-### 1. Запуск бэкенда (FastAPI):
-```bash
-cd /home/aboka/Desktop/project/sapar/backend
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+```mermaid
+flowchart TD
+    A["Спринт 1: Финтех & Запуск (Текущий)"] --> B["Спринт 2: Мобильный релиз & Google Play"]
+    B --> C["Спринт 3: B2B экосистема турагентств"]
+    C --> D["Спринт 4: Масштабирование & СНГ рынки"]
+    
+    A -.-> A1["• Боевой Kaspi Pay\n• PDF-ваучеры\n• PostgreSQL + Docker"]
+    B -.-> B1["• Сборка Android AppBundle\n• Firebase Push-уведомления\n• Казахский язык интерфейса"]
+    C -.-> C1["• Редактирование туров\n• CRM туристов для агентств\n• Экспорт списков в Excel"]
+    D -.-> D1["• Карты Halyk Bank для иностранцев\n• Динамическое ценообразование\n• Redis кэш"]
 ```
-- API & Документация Swagger: **`http://localhost:8000/docs`**
 
-### 2. Запуск фронтенда (Flutter Web):
+---
+
+## 🚀 4. БЫСТРЫЙ ЗАПУСК ДЛЯ РАЗРАБОТЧИКОВ
+
+### 1. Бэкенд (FastAPI):
 ```bash
-cd /home/aboka/Desktop/project/sapar/build/web
+cd "/home/aboka/Рабочий стол/project/sapar/backend"
+source venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+- Swagger UI документация: **`http://localhost:8000/docs`**
+- OpenAPI схема: **`http://localhost:8000/openapi.json`**
+
+### 2. Фронтенд (Flutter Web):
+```bash
+cd "/home/aboka/Рабочий стол/project/sapar/build/web"
 python3 serve.py
 ```
-- Доступ с компьютера и телефона по локальной сети: **`http://192.168.10.12:5050`**
+- Доступ с ПК и смартфонов в сети: **`http://192.168.10.12:5050`**
+
+### 3. Запуск тестов:
+```bash
+# Бэкенд тесты
+cd "/home/aboka/Рабочий стол/project/sapar/backend" && ./venv/bin/pytest tests -v
+
+# Фронтенд анализ и тесты
+cd "/home/aboka/Рабочий стол/project/sapar" && dart analyze . && flutter test
+```

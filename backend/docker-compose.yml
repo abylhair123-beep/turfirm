@@ -1,19 +1,48 @@
 version: '3.8'
 
 services:
+  # База данных PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: sapar_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=sapar
+      - POSTGRES_PASSWORD=sapar_secret
+      - POSTGRES_DB=sapar
+    ports:
+      # На хосте 5433 (5432 часто уже занят локальным Postgres);
+      # внутри docker-сети сервис всё равно слушает 5432.
+      - "5433:5432"
+    volumes:
+      - sapar_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sapar -d sapar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Бэкенд FastAPI
   sapar-backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: sapar_backend
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
       - APP_NAME=Sapar API
       - ENVIRONMENT=production
       - DEBUG=false
-      - DATABASE_URL=sqlite:///./sapar.db
+      # Бэкенд обращается к Postgres по имени сервиса "postgres" внутри docker-сети
+      - DATABASE_URL=postgresql+psycopg2://sapar:sapar_secret@postgres:5432/sapar
       - SECRET_KEY=sapar-production-secure-key-2026
     volumes:
       - ./data:/app/data
+
+volumes:
+  sapar_pgdata:

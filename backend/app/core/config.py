@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24  # 1 day
     algorithm: str = "HS256"
 
-    database_url: str = "sqlite:///./sapar.db"
+    # PostgreSQL. Локально — опубликованный порт docker-контейнера (5433);
+    # внутри docker-сети переопределяется на postgres:5432 (см. docker-compose.yml).
+    database_url: str = "postgresql+psycopg2://sapar:sapar_secret@localhost:5433/sapar"
     cors_origins: Union[List[str], str] = ["*"]
 
     # --- Платежная система Kaspi Pay ---

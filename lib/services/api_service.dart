@@ -44,12 +44,23 @@ class PaymentResponseData {
 }
 
 class ApiService {
+  // Порт Sapar-бэкенда. Сейчас 8001, т.к. порт 8000 занят другим проектом.
+  // Когда освободишь 8000 — верни сюда 8000 (одно место).
+  static const int _apiPort = 8001;
+
   static String get defaultBaseUrl {
     if (kIsWeb) {
-      final host = Uri.base.host.isNotEmpty ? Uri.base.host : '192.168.10.12';
-      return 'http://$host:8000/api/v1';
+      // В вебе берём хост текущей страницы (localhost при локальном запуске)
+      final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+      return 'http://$host:$_apiPort/api/v1';
     }
-    return 'http://192.168.10.12:8000/api/v1';
+    // Android-эмулятор видит хост-машину как 10.0.2.2, остальное — localhost.
+    // Для теста на реальном телефоне по локалке задайте ApiService.baseUrl вручную
+    // (например, 'http://192.168.10.12:$_apiPort/api/v1' — IP вашего ПК).
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:$_apiPort/api/v1';
+    }
+    return 'http://localhost:$_apiPort/api/v1';
   }
 
   static String baseUrl = defaultBaseUrl;

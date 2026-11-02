@@ -5,6 +5,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
 import '../widgets/icon_circle_button.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/tour_photo.dart';
 import 'booking_screen.dart';
 
 class TourDetailScreen extends StatelessWidget {
@@ -138,7 +139,9 @@ class _Hero extends StatelessWidget {
       height: 250,
       child: Stack(
         children: [
-          Positioned.fill(child: Container(color: tour.photoColor)),
+          Positioned.fill(
+            child: TourPhoto(photoUrl: tour.photoUrl, fallbackColor: tour.photoColor),
+          ),
           Positioned(
             top: 18,
             left: 18,

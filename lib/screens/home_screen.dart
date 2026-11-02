@@ -7,6 +7,7 @@ import '../widgets/app_icon.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/icon_circle_button.dart';
 import '../widgets/tour_card.dart';
+import 'create_tour_screen.dart';
 import 'tour_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -69,10 +70,31 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadTours();
   }
 
+  Future<void> _openCreateTour() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const CreateTourScreen()),
+    );
+    if (created == true && mounted) {
+      // Показываем все туры, чтобы новый точно попал в список
+      setState(() {
+        _activeCategory = 'Все';
+        _searchController.clear();
+      });
+      _loadTours();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openCreateTour,
+        backgroundColor: AppColors.teal,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: Text('Тур', style: AppText.sora(size: 14, color: Colors.white)),
+      ),
       body: SafeArea(
         child: Column(
           children: [

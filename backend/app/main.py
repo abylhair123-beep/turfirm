@@ -1,8 +1,10 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 # Логи приложения (в т.ч. dev-уведомления) выводим в консоль независимо от uvicorn
 _app_logger = logging.getLogger("app")
@@ -23,6 +25,7 @@ from app.notifications.router import router as notifications_router
 from app.payments.router import router as payments_router
 from app.reviews.router import router as reviews_router
 from app.seed import seed_data
+from app.storage.router import router as storage_router
 from app.tours.router import router as tours_router
 
 
@@ -35,6 +38,8 @@ async def lifespan(app: FastAPI):
         seed_data(db)
     finally:
         db.close()
+    # Папка для локальной загрузки медиа
+    os.makedirs(settings.upload_dir, exist_ok=True)
     yield
 
 
@@ -67,8 +72,13 @@ app.include_router(tours_router, prefix=settings.api_v1_prefix)
 app.include_router(bookings_router, prefix=settings.api_v1_prefix)
 app.include_router(payments_router, prefix=settings.api_v1_prefix)
 app.include_router(notifications_router, prefix=settings.api_v1_prefix)
+app.include_router(storage_router, prefix=settings.api_v1_prefix)
 app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
+
+# Раздача локально загруженных медиа-файлов по /uploads/...
+os.makedirs(settings.upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
 @app.get("/", include_in_schema=False)

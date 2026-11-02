@@ -3,6 +3,7 @@ import '../models/tour.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'app_icon.dart';
+import 'tour_photo.dart';
 
 /// Карточка тура в каталоге — фото-плейсхолдер (сплошной брендовый цвет,
 /// как в макете), бейдж агентства, рейтинг, цена.
@@ -32,7 +33,12 @@ class TourCard extends StatelessWidget {
                 height: 150,
                 child: Stack(
                   children: [
-                    Container(color: tour.photoColor),
+                    Positioned.fill(
+                      child: TourPhoto(
+                        photoUrl: tour.photoUrl,
+                        fallbackColor: tour.photoColor,
+                      ),
+                    ),
                     Positioned(
                       top: 12,
                       left: 12,

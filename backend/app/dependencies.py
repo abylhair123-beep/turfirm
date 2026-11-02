@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import pwd_context
 from app.database import get_db
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/oauth-token", auto_error=False)
 
 
 def get_current_user_optional(

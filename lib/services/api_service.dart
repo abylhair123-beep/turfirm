@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
 import '../models/review.dart';
@@ -221,20 +222,6 @@ class ApiService {
   }
 
   // ==================== ТУРЫ ====================
-
-  /// Создание тура турагентством (B2B)
-  static Future<bool> createTour(Map<String, dynamic> data) async {
-    try {
-      final uri = Uri.parse('$baseUrl/tours');
-      final response = await http
-          .post(uri, headers: _headers(), body: jsonEncode(data))
-          .timeout(const Duration(seconds: 6));
-      return response.statusCode == 201 || response.statusCode == 200;
-    } catch (e) {
-      debugPrint('[ApiService] createTour error: $e');
-      return true;
-    }
-  }
 
   /// Получение каталога туров с поддержкой фильтрации
   static Future<List<Tour>> getTours({
@@ -577,5 +564,80 @@ class ApiService {
       debugPrint('[ApiService] addReview error: $e');
       return true; // мок успех
     }
+  }
+
+  // ========================= Панель агентства =========================
+
+  /// MIME-тип картинки по расширению имени файла.
+  static MediaType _imageMediaType(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.png')) return MediaType('image', 'png');
+    if (lower.endsWith('.webp')) return MediaType('image', 'webp');
+    if (lower.endsWith('.gif')) return MediaType('image', 'gif');
+    return MediaType('image', 'jpeg');
+  }
+
+  /// Загрузка изображения на бэкенд. Возвращает публичный URL файла или null.
+  /// Работает и в вебе, и на мобильных — отправляем байты.
+  static Future<String?> uploadImage({
+    required Uint8List bytes,
+    required String filename,
+    required String token,
+    String folder = 'tours',
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/uploads').replace(queryParameters: {'folder': folder});
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+          contentType: _imageMediaType(filename),
+        ),
+      );
+
+      final streamed = await request.send().timeout(const Duration(seconds: 15));
+      final response = await http.Response.fromStream(streamed);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return data['url'] as String?;
+      }
+      debugPrint('[ApiService] Upload failed: ${response.statusCode} ${response.body}');
+    } catch (e) {
+      debugPrint('[ApiService] Upload error: $e');
+    }
+    return null;
+  }
+
+  /// Создание тура (нужен токен агентства). Возвращает созданный Tour или null.
+  static Future<Tour?> createTour({
+    required Map<String, dynamic> data,
+    required String token,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return Tour.fromJson(json);
+      }
+      debugPrint('[ApiService] Create tour failed: ${response.statusCode} ${response.body}');
+    } catch (e) {
+      debugPrint('[ApiService] Create tour error: $e');
+    }
+    return null;
   }
 }

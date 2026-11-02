@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
+
+# Локальная конфигурация и БД
+.env
+*.db
+sapar.db
+
+# Данные Docker-тома
+data/
+
+# Загруженные медиа-файлы
+uploads/

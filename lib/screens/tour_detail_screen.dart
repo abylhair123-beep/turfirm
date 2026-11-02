@@ -7,6 +7,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
 import '../widgets/icon_circle_button.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/tour_photo.dart';
 import 'booking_screen.dart';
 
 class TourDetailScreen extends StatefulWidget {
@@ -299,13 +300,7 @@ class _Hero extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: tour.photoUrl != null && tour.photoUrl!.isNotEmpty
-                ? Image.network(
-                    tour.photoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: tour.photoColor),
-                  )
-                : Container(color: tour.photoColor),
+            child: TourPhoto(photoUrl: tour.photoUrl, fallbackColor: tour.photoColor),
           ),
           Positioned(
             top: 18,

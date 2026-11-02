@@ -3,7 +3,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
-import 'add_tour_screen.dart';
+import 'create_tour_screen.dart';
 import 'auth_screen.dart';
 import 'bookings_list_screen.dart';
 import 'favorites_screen.dart';
@@ -172,7 +172,7 @@ class _AuthenticatedView extends StatelessWidget {
                 ElevatedButton.icon(
                   onPressed: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AddTourScreen()),
+                      MaterialPageRoute(builder: (_) => const CreateTourScreen()),
                     );
                   },
                   icon: const Icon(Icons.add_rounded, color: Color(0xFF0E7C77), size: 18),

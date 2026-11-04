@@ -29,6 +29,14 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    from app.core.limiter import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
 def override_get_db():
     try:
         db = TestingSessionLocal()
@@ -266,3 +274,66 @@ def test_favorites():
 
     check_again = client.get("/api/v1/favorites/check/antalya-7n", headers=headers)
     assert check_again.json()["isFavorite"] is False
+
+
+def test_health_extended():
+    res = client.get("/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert "redis" in data
+    assert "rate_limiting" in data
+    assert "sentry" in data
+
+
+def test_rate_limiting_enforcement():
+    """Проверка срабатывания Rate Limiting (slowapi 5/minute) при серии запросов."""
+    from app.core.limiter import limiter
+    limiter.reset()
+
+    # 5 запросов разрешены
+    for _ in range(5):
+        resp = client.post("/api/v1/auth/login", json={
+            "email": "invalid@sapar.kz",
+            "password": "wrongpassword",
+        })
+        # Возвращается 401 Unauthorized (логика бэкенда)
+        assert resp.status_code in (401, 200)
+
+    # 6-й запрос блокируется лимитером (429 Too Many Requests)
+    exceeded_resp = client.post("/api/v1/auth/login", json={
+        "email": "invalid@sapar.kz",
+        "password": "wrongpassword",
+    })
+    assert exceeded_resp.status_code == 429
+    limiter.reset()
+
+
+def test_redis_cache_manager():
+    """Проверка генерации ключей и отказоустойчивости менеджера кэша."""
+    from app.core.cache import cache
+
+    # Генерация детерминированных ключей
+    key1 = cache.generate_key("tours", cat="Пляжный отдых", min_p=100000)
+    key2 = cache.generate_key("tours", cat="Пляжный отдых", min_p=100000)
+    key3 = cache.generate_key("tours", cat="Горы", min_p=100000)
+    assert key1 == key2
+    assert key1 != key3
+
+    # Если Redis оффлайн, get/set/delete не должны вызывать исключений
+    val = cache.get("non_existent_key")
+    assert val is None
+    cache.delete("non_existent_key")
+    cache.delete_pattern("sapar:cache:tours:*")
+
+
+def test_database_backup_module():
+    """Проверка структуры и парсера параметров в scripts/backup_db.py."""
+    from scripts.backup_db import parse_db_url
+    params = parse_db_url("postgresql+psycopg2://testuser:testpass@db.sapar.kz:5432/sapardb")
+    assert params["user"] == "testuser"
+    assert params["password"] == "testpass"
+    assert params["host"] == "db.sapar.kz"
+    assert params["port"] == 5432
+    assert params["dbname"] == "sapardb"
+

@@ -77,12 +77,12 @@
 - [x] **Миграция БД на PostgreSQL (Выполнено):**
   - [x] Развертывание PostgreSQL 16 в Docker ([`backend/docker-compose.yml`](file:///home/aboka/Desktop/project/sapar/backend/docker-compose.yml)).
   - [x] Подключение пула соединений SQLAlchemy с `pool_pre_ping=True` и драйвером `psycopg2-binary`.
-- [ ] **Резервное копирование и кэширование:**
-  - [ ] Настройка бэкапов БД (`pg_dump` по расписанию в S3).
-  - [ ] Кэширование популярных туров и категорий в Redis (5–15 минут).
-- [ ] **Защита и безопасность API:**
-  - [ ] Ограничение частоты запросов (Rate Limiting) через `slowapi` (защита от брутфорса и парсинга).
-  - [ ] Мониторинг ошибок в реальном времени через Sentry (FastAPI + Flutter).
+- [x] **Резервное копирование и кэширование:**
+  - [x] Настройка бэкапов БД (`pg_dump` с gzip по расписанию в S3/MinIO, ротация 7 дней в [`scripts/backup_db.py`](file:///home/aboka/Desktop/project/sapar/backend/scripts/backup_db.py) и cron-сервис `db-backup` в Docker Compose).
+  - [x] Кэширование популярных туров (10 мин) и категорий (15 мин) в Redis с graceful fallback и инвалидацией ([`app/core/cache.py`](file:///home/aboka/Desktop/project/sapar/backend/app/core/cache.py)).
+- [x] **Защита и безопасность API:**
+  - [x] Ограничение частоты запросов (Rate Limiting) через `slowapi` (защита от брутфорса на `/auth/login` и `/auth/register`, защита от парсинга на каталоге в [`app/core/limiter.py`](file:///home/aboka/Desktop/project/sapar/backend/app/core/limiter.py)).
+  - [x] Мониторинг ошибок в реальном времени через Sentry (FastAPI middleware/SDK + Flutter [`SentryService`](file:///home/aboka/Desktop/project/sapar/lib/services/sentry_service.dart)).
 
 ---
 

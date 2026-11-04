@@ -5,6 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # Логи приложения (в т.ч. dev-уведомления) выводим в консоль независимо от uvicorn
 _app_logger = logging.getLogger("app")
@@ -18,7 +21,9 @@ if not _app_logger.handlers:
 from app.agencies.router import router as agencies_router
 from app.auth.router import router as auth_router
 from app.bookings.router import router as bookings_router
+from app.core.cache import cache
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.database import Base, SessionLocal, engine
 from app.favorites.router import router as favorites_router
 from app.notifications.router import router as notifications_router
@@ -27,6 +32,20 @@ from app.reviews.router import router as reviews_router
 from app.seed import seed_data
 from app.storage.router import router as storage_router
 from app.tours.router import router as tours_router
+
+# Мониторинг ошибок Sentry
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.sentry_environment or settings.environment,
+            traces_sample_rate=settings.sentry_traces_sample_rate,
+            send_default_pii=False,
+        )
+        _app_logger.info("Мониторинг Sentry успешно активирован")
+    except Exception as e:
+        _app_logger.warning(f"Не удалось инициализировать Sentry SDK: {e}")
 
 
 @asynccontextmanager
@@ -49,6 +68,11 @@ app = FastAPI(
     description="Backend API для маркетплейса турагентств Sapar с поддержкой Kaspi Pay",
     lifespan=lifespan,
 )
+
+# Подключение Rate Limiting (slowapi)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS configuration
 origins = settings.cors_origins if isinstance(settings.cors_origins, list) else ["*"]
@@ -94,4 +118,13 @@ def health_check():
         "environment": settings.environment,
         "version": "1.0.0",
         "payments": "Kaspi Pay / Card / Halyk",
+        "redis": "connected" if cache.ping() else "offline",
+        "rate_limiting": "enabled" if settings.rate_limit_enabled else "disabled",
+        "sentry": "active" if bool(settings.sentry_dsn) else "disabled",
     }
+
+
+@app.get(f"{settings.api_v1_prefix}/system/sentry-debug", tags=["Система"])
+def trigger_sentry_error():
+    """Тестовый эндпоинт для проверки перехвата ошибок в Sentry."""
+    raise ZeroDivisionError("Sapar Sentry Debug Test Exception")

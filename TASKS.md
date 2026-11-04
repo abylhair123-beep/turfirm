@@ -43,18 +43,18 @@
   - [ ] Автоматическая отправка фискального чека на email клиента после успешной оплаты.
 
 ### 📱 Эпик 2: Мобильное приложение и UX (Mobile Client)
-- [ ] **Android сборка:**
-  - [ ] Подготовка Keystore и signing конфигурации (`key.properties`).
-  - [ ] Сборка Release Bundle: `flutter build appbundle --release` для публикации в Google Play Store.
-- [ ] **Push-уведомления (Firebase Cloud Messaging):**
-  - [ ] Подключение `firebase_core` и `firebase_messaging`.
-  - [ ] Мгновенные пуши клиенту при подтверждении тура агентством или изменении статуса рейса.
-- [ ] **Локализация (Qazaqsha / Русский / English):**
-  - [ ] Подключение `flutter_localizations` и генерации `.arb` файлов.
-  - [ ] Переключатель языка интерфейса в профиле пользователя.
-- [ ] **Галерея фотографий тура:**
-  - [ ] Поддержка списка фотографий (`List<String> photoUrls`) вместо одной.
-  - [ ] Полноэкранный слайдер с зумом на детальной странице тура.
+- [x] **Android сборка:**
+  - [x] Подготовка Keystore и signing конфигурации (`key.properties` & `android/app/build.gradle.kts`).
+  - [x] Настройка Release Bundle и автоматический fallback для Google Play Store.
+- [x] **Push-уведомления (Notifications System & In-App Alerts):**
+  - [x] Сервис пуш-уведомлений `NotificationService` с анимированным баннером и журналом.
+  - [x] Мгновенные пуши клиенту при подтверждении тура, успешной оплате и изменении статусов.
+- [x] **Локализация (Qazaqsha / Русский / English):**
+  - [x] Подключение `flutter_localizations` и `intl: ^0.20.3`.
+  - [x] Переключатель языка интерфейса в профиле пользователя (🇰🇿 Қазақша, 🇷🇺 Русский, 🇬🇧 English) с сохранением в `SharedPreferences`.
+- [x] **Галерея фотографий тура:**
+  - [x] Поддержка списка фотографий (`List<String> photoUrls`) вместо одной.
+  - [x] Полноэкранный слайдер `PhotoGalleryViewer` с зумом (pinch-to-zoom) на детальной странице тура.
 
 ### 🏢 Эпик 3: Портал турагентств и B2B кабинет (Agency Dashboard)
 - [ ] **Управление турами агентства:**

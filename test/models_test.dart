@@ -1,10 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turfirm/models/booking.dart';
 import 'package:turfirm/models/review.dart';
 import 'package:turfirm/models/tour.dart';
 import 'package:turfirm/models/user.dart';
+import 'package:turfirm/services/locale_service.dart';
+import 'package:turfirm/services/notification_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   group('Models Unit Tests', () {
     test('AppUser fromJson / toJson', () {
       final json = {
@@ -45,12 +51,34 @@ void main() {
       expect(review.comment, 'Всё понравилось, особенно пляж!');
     });
 
-    test('Tour parsing and mock data integrity', () {
+    test('Tour parsing and photo gallery (List<String> photoUrls)', () {
       expect(mockTours.isNotEmpty, isTrue);
       final first = mockTours.first;
       expect(first.title.isNotEmpty, isTrue);
       expect(first.priceFrom, greaterThan(0));
       expect(first.included.isNotEmpty, isTrue);
+      expect(first.photoUrls.length, greaterThanOrEqualTo(2));
+      expect(first.primaryPhotoUrl, isNotNull);
+
+      // Проверка fromJson с photo_urls списком
+      final jsonWithGallery = {
+        'id': 'test-gallery-1',
+        'agency': 'Silk Road',
+        'destination': 'Алаколь',
+        'title': 'Тур на Алаколь',
+        'photoUrls': [
+          'https://images.unsplash.com/photo-1',
+          'https://images.unsplash.com/photo-2',
+        ],
+        'priceFrom': 75000,
+        'description': 'Отдых на озере',
+        'included': ['Трансфер', 'Отель'],
+      };
+
+      final parsed = Tour.fromJson(jsonWithGallery);
+      expect(parsed.photoUrls.length, 2);
+      expect(parsed.primaryPhotoUrl, 'https://images.unsplash.com/photo-1');
+      expect(parsed.toJson()['photoUrls'], contains('https://images.unsplash.com/photo-2'));
     });
 
     test('BookingRequest serialization', () {
@@ -90,6 +118,45 @@ void main() {
       expect(result.id, 'bk-123');
       expect(result.totalPrice, 499800);
       expect(result.status, 'paid');
+    });
+  });
+
+  group('Mobile & UX Services Tests', () {
+    test('LocaleService translations support kk, ru, en', () {
+      // Проверка русского языка
+      expect(LocaleService.tr('nav_home'), 'Главная');
+      expect(LocaleService.tr('book_now'), 'Забронировать тур');
+
+      // Переключение на казахский
+      LocaleService.setLanguage(AppLanguage.kk);
+      expect(LocaleService.tr('nav_home'), 'Басты бет');
+      expect(LocaleService.tr('book_now'), 'Турды брондау');
+      expect(LocaleService.currentLanguage, AppLanguage.kk);
+
+      // Переключение на английский
+      LocaleService.setLanguage(AppLanguage.en);
+      expect(LocaleService.tr('nav_home'), 'Home');
+      expect(LocaleService.tr('book_now'), 'Book Tour');
+      expect(LocaleService.currentLanguage, AppLanguage.en);
+
+      // Возврат на русский
+      LocaleService.setLanguage(AppLanguage.ru);
+      expect(LocaleService.currentLanguage, AppLanguage.ru);
+    });
+
+    test('NotificationService handles in-app push triggers', () {
+      expect(NotificationService.notificationsNotifier.value.isEmpty, isTrue);
+
+      NotificationService.simulateBookingConfirmed(destination: 'Анталия');
+      expect(NotificationService.notificationsNotifier.value.isNotEmpty, isTrue);
+      expect(
+        NotificationService.notificationsNotifier.value.first.title,
+        contains('Бронирование подтверждено'),
+      );
+      expect(
+        NotificationService.notificationsNotifier.value.first.body,
+        contains('Анталия'),
+      );
     });
   });
 }

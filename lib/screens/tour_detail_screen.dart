@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
 import '../widgets/icon_circle_button.dart';
+import '../widgets/photo_gallery_viewer.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/tour_photo.dart';
 import 'booking_screen.dart';
@@ -288,20 +289,92 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
   }
 }
 
-class _Hero extends StatelessWidget {
+class _Hero extends StatefulWidget {
   const _Hero({required this.tour});
 
   final Tour tour;
 
   @override
+  State<_Hero> createState() => _HeroState();
+}
+
+class _HeroState extends State<_Hero> {
+  int _currentIndex = 0;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final tour = widget.tour;
+    final photos = tour.photoUrls;
+
     return SizedBox(
-      height: 250,
+      height: 260,
       child: Stack(
         children: [
+          // Слайдер фотографий
           Positioned.fill(
-            child: TourPhoto(photoUrl: tour.photoUrl, fallbackColor: tour.photoColor),
+            child: photos.isNotEmpty
+                ? PageView.builder(
+                    controller: _pageController,
+                    itemCount: photos.length,
+                    onPageChanged: (i) => setState(() => _currentIndex = i),
+                    itemBuilder: (context, i) {
+                      return GestureDetector(
+                        onTap: () {
+                          PhotoGalleryViewer.show(
+                            context,
+                            photoUrls: photos,
+                            initialIndex: _currentIndex,
+                            title: tour.title,
+                            fallbackColor: tour.photoColor,
+                          );
+                        },
+                        child: TourPhoto(
+                          photoUrl: photos[i],
+                          fallbackColor: tour.photoColor,
+                        ),
+                      );
+                    },
+                  )
+                : TourPhoto(
+                    photoUrl: tour.photoUrl,
+                    fallbackColor: tour.photoColor,
+                  ),
           ),
+
+          // Затемнение сверху для читаемости кнопок
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 70,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Кнопка назад
           Positioned(
             top: 18,
             left: 18,
@@ -313,6 +386,8 @@ class _Hero extends StatelessWidget {
               onTap: () => Navigator.of(context).pop(),
             ),
           ),
+
+          // Кнопка избранного
           Positioned(
             top: 18,
             right: 18,
@@ -343,13 +418,15 @@ class _Hero extends StatelessWidget {
               },
             ),
           ),
+
+          // Локация тура (снизу слева)
           Positioned(
             left: 20,
             bottom: 16,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.ink.withValues(alpha: 0.5),
+                color: AppColors.ink.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
@@ -357,11 +434,50 @@ class _Hero extends StatelessWidget {
                 children: [
                   const AppIcon(AppIcons.pin, size: 13, color: Colors.white),
                   const SizedBox(width: 6),
-                  Text(tour.destination, style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white)),
+                  Text(
+                    tour.destination,
+                    style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white),
+                  ),
                 ],
               ),
             ),
           ),
+
+          // Счетчик фото и кнопка полноэкранного зума (снизу справа)
+          if (photos.isNotEmpty)
+            Positioned(
+              right: 20,
+              bottom: 16,
+              child: GestureDetector(
+                onTap: () {
+                  PhotoGalleryViewer.show(
+                    context,
+                    photoUrls: photos,
+                    initialIndex: _currentIndex,
+                    title: tour.title,
+                    fallbackColor: tour.photoColor,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_currentIndex + 1}/${photos.length}',
+                        style: AppText.work(size: 12, weight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

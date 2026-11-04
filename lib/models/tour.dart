@@ -20,9 +20,10 @@ class Tour {
     required this.priceFrom,
     required this.photoColor,
     this.photoUrl,
+    List<String>? photoUrls,
     required this.description,
     required this.included,
-  });
+  }) : _photoUrls = photoUrls;
 
   final String id;
   final String agency;
@@ -40,8 +41,27 @@ class Tour {
   final int priceFrom;
   final Color photoColor;
   final String? photoUrl;
+  final List<String>? _photoUrls;
   final String description;
   final List<String> included;
+
+  /// Список всех фото тура (если передан photoUrls — используем его,
+  /// иначе оборачиваем одиночный photoUrl, либо пустой список).
+  List<String> get photoUrls {
+    if (_photoUrls != null && _photoUrls.isNotEmpty) {
+      return _photoUrls;
+    }
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return [photoUrl!];
+    }
+    return const [];
+  }
+
+  /// Главное превью-фото тура.
+  String? get primaryPhotoUrl {
+    final list = photoUrls;
+    return list.isNotEmpty ? list.first : photoUrl;
+  }
 
   String get priceFormatted => '${_formatThousands(priceFrom)} ₸';
 
@@ -67,6 +87,18 @@ class Tour {
   }
 
   factory Tour.fromJson(Map<String, dynamic> json) {
+    // Извлекаем список фото
+    List<String> urls = [];
+    if (json['photoUrls'] is List) {
+      urls = (json['photoUrls'] as List).map((e) => e.toString()).toList();
+    } else if (json['photo_urls'] is List) {
+      urls = (json['photo_urls'] as List).map((e) => e.toString()).toList();
+    }
+    final singleUrl = json['photoUrl'] as String? ?? json['photo_url'] as String?;
+    if (urls.isEmpty && singleUrl != null && singleUrl.isNotEmpty) {
+      urls = [singleUrl];
+    }
+
     return Tour(
       id: json['id'] as String? ?? '',
       agency: json['agency'] as String? ?? 'Турагентство',
@@ -83,7 +115,8 @@ class Tour {
       reviewsCount: (json['reviewsCount'] as num? ?? json['reviews_count'] as num?)?.toInt() ?? 0,
       priceFrom: (json['priceFrom'] as num? ?? json['price_from'] as num?)?.toInt() ?? 0,
       photoColor: _parseColor(json['photoColor'] ?? json['photo_color']),
-      photoUrl: json['photoUrl'] as String? ?? json['photo_url'] as String?,
+      photoUrl: singleUrl,
+      photoUrls: urls,
       description: json['description'] as String? ?? '',
       included: (json['included'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     );
@@ -106,7 +139,8 @@ class Tour {
       'reviewsCount': reviewsCount,
       'priceFrom': priceFrom,
       'photoColor': '0x${photoColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}',
-      'photoUrl': photoUrl,
+      'photoUrl': primaryPhotoUrl,
+      'photoUrls': photoUrls,
       'description': description,
       'included': included,
     };
@@ -130,6 +164,13 @@ final mockTours = <Tour>[
     reviewsCount: 213,
     priceFrom: 245000,
     photoColor: Color(0xFF0E7C77),
+    photoUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
+    ],
     description:
         'Отель 4★ на первой линии с собственным пляжем, бассейном и вечерней '
         'анимацией. Идеально для семейного отдыха и пар — 12 минут от '
@@ -157,6 +198,12 @@ final mockTours = <Tour>[
     reviewsCount: 98,
     priceFrom: 398000,
     photoColor: Color(0xFFFF6F59),
+    photoUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=80',
+    ],
     description:
         'Отель 5★ в центре Дубая, вид на Бурдж-Халифа, шаттл до пляжа '
         'каждый час. Подходит для первой поездки в ОАЭ.',
@@ -165,6 +212,37 @@ final mockTours = <Tour>[
       'Отель 5★, завтраки',
       'Трансфер аэропорт–отель',
       'Медицинская страховка',
+    ],
+  ),
+  const Tour(
+    id: 'shymbulak-3n',
+    agency: 'Nomad Explore',
+    agencyVerified: true,
+    destination: 'Шымбулак, Казахстан',
+    title: 'Горный уикенд Шымбулак',
+    category: 'Горы',
+    nights: '3 ночи',
+    dates: '20–23 нояб',
+    meal: 'Завтраки',
+    departureCity: 'Алматы',
+    meta: '3 ночи · отель на высоте 2200м',
+    rating: 4.95,
+    reviewsCount: 142,
+    priceFrom: 115000,
+    photoColor: Color(0xFF1E3A8A),
+    photoUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    photoUrls: [
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1486870591958-9b9d0d1dda99?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1200&q=80',
+    ],
+    description:
+        'Уютное горное шале в ущелье Медеу с панорамным видом на пик Талгар. Включен ски-пасс на канатную дорогу и СПА-комплекс.',
+    included: [
+      'Проживание в шале 4★',
+      'Завтраки шведский стол',
+      'Ски-пасс на канатную дорогу',
+      'Трансфер из аэропорта Алматы',
     ],
   ),
 ];

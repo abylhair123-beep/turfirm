@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/tour.dart';
 import '../services/api_service.dart';
+import '../services/locale_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
@@ -179,7 +180,7 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Популярные туры', style: AppText.h3),
+                Text(LocaleService.tr('popular_tours'), style: AppText.h3),
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -189,7 +190,7 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
                     _loadTours();
                   },
                   child: Text(
-                    'Все туры ›',
+                    LocaleService.tr('all_tours'),
                     style: AppText.work(
                       size: 13.5,
                       weight: FontWeight.w600,
@@ -269,8 +270,8 @@ class _TopBar extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Здравствуйте, $displayName', style: AppText.work(size: 13, color: AppColors.muted)),
-                    Text('Куда полетим?', style: AppText.h4.copyWith(fontSize: 16)),
+                    Text('${LocaleService.tr('hello')}, $displayName', style: AppText.work(size: 13, color: AppColors.muted)),
+                    Text(LocaleService.tr('where_to_fly'), style: AppText.h4.copyWith(fontSize: 16)),
                   ],
                 ),
               ],
@@ -338,7 +339,7 @@ class _SearchBar extends StatelessWidget {
               onChanged: onChanged,
               onSubmitted: onSubmitted,
               decoration: InputDecoration(
-                hintText: 'Город, страна, отель...',
+                hintText: LocaleService.tr('search_hint'),
                 hintStyle: AppText.work(size: 14.5, color: AppColors.mutedLight),
                 border: InputBorder.none,
                 isDense: true,
@@ -406,50 +407,56 @@ class _BottomTabBar extends StatelessWidget {
   final int index;
   final ValueChanged<int> onChanged;
 
-  static const _tabs = [
-    (AppIcons.home, 'Главная'),
-    (AppIcons.searchTab, 'Поиск'),
-    (AppIcons.ticket, 'Брони'),
-    (AppIcons.user, 'Профиль'),
+  List<(String, String)> _getTabs() => [
+    (AppIcons.home, LocaleService.tr('nav_home')),
+    (AppIcons.searchTab, LocaleService.tr('nav_search')),
+    (AppIcons.ticket, LocaleService.tr('nav_bookings')),
+    (AppIcons.user, LocaleService.tr('nav_profile')),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      padding: const EdgeInsets.only(top: 12, bottom: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          for (var i = 0; i < _tabs.length; i++)
-            GestureDetector(
-              onTap: () => onChanged(i),
-              behavior: HitTestBehavior.opaque,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppIcon(
-                    _tabs[i].$1,
-                    size: 20,
-                    color: i == index ? AppColors.teal : AppColors.mutedLight,
+    return ValueListenableBuilder<Locale>(
+      valueListenable: LocaleService.localeNotifier,
+      builder: (context, _, __) {
+        final tabs = _getTabs();
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppColors.border)),
+          ),
+          padding: const EdgeInsets.only(top: 12, bottom: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (var i = 0; i < tabs.length; i++)
+                GestureDetector(
+                  onTap: () => onChanged(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppIcon(
+                        tabs[i].$1,
+                        size: 20,
+                        color: i == index ? AppColors.teal : AppColors.mutedLight,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        tabs[i].$2,
+                        style: AppText.work(
+                          size: 11,
+                          weight: i == index ? FontWeight.w600 : FontWeight.w400,
+                          color: i == index ? AppColors.teal : AppColors.mutedLight,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _tabs[i].$2,
-                    style: AppText.work(
-                      size: 11,
-                      weight: i == index ? FontWeight.w600 : FontWeight.w400,
-                      color: i == index ? AppColors.teal : AppColors.mutedLight,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

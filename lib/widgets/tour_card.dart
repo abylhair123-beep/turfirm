@@ -36,7 +36,7 @@ class TourCard extends StatelessWidget {
                   children: [
                     Positioned.fill(
                       child: TourPhoto(
-                        photoUrl: tour.photoUrl,
+                        photoUrl: tour.primaryPhotoUrl,
                         fallbackColor: tour.photoColor,
                       ),
                     ),

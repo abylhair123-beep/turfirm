@@ -212,6 +212,27 @@ def update_tour(
     return _tour_to_response(tour)
 
 
+@router.patch("/{tour_id}/toggle-active", response_model=TourResponse)
+def toggle_tour_active(
+    tour_id: str,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Быстрая пауза или возобновление продаж тура в 1 клик (is_active = not is_active)."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на управление этим туром")
+
+    tour.is_active = not tour.is_active
+    db.commit()
+    db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
+    return _tour_to_response(tour)
+
+
 @router.delete("/{tour_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tour(
     tour_id: str,

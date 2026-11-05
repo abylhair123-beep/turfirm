@@ -4,6 +4,7 @@ import 'package:turfirm/models/booking.dart';
 import 'package:turfirm/models/review.dart';
 import 'package:turfirm/models/tour.dart';
 import 'package:turfirm/models/user.dart';
+import 'package:turfirm/services/api_service.dart';
 import 'package:turfirm/services/locale_service.dart';
 import 'package:turfirm/services/notification_service.dart';
 
@@ -157,6 +158,11 @@ void main() {
         NotificationService.notificationsNotifier.value.first.body,
         contains('Анталия'),
       );
+    });
+
+    test('ApiService provides correct voucher PDF URL', () {
+      final url = ApiService.getVoucherPdfUrl('BK-998877');
+      expect(url, contains('/bookings/BK-998877/voucher.pdf'));
     });
   });
 }

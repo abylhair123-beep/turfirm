@@ -23,6 +23,7 @@ class Tour {
     List<String>? photoUrls,
     required this.description,
     required this.included,
+    this.isActive = true,
   }) : _photoUrls = photoUrls;
 
   final String id;
@@ -44,6 +45,7 @@ class Tour {
   final List<String>? _photoUrls;
   final String description;
   final List<String> included;
+  final bool isActive;
 
   /// Список всех фото тура (если передан photoUrls — используем его,
   /// иначе оборачиваем одиночный photoUrl, либо пустой список).
@@ -119,6 +121,7 @@ class Tour {
       photoUrls: urls,
       description: json['description'] as String? ?? '',
       included: (json['included'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      isActive: json['isActive'] as bool? ?? json['is_active'] as bool? ?? true,
     );
   }
 

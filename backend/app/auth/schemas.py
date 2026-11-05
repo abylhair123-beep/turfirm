@@ -40,3 +40,20 @@ class UserResponse(UserBase):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SmsSendOtpRequest(BaseModel):
+    phone: str
+
+
+class SmsSendOtpResponse(BaseModel):
+    status: str
+    message: str
+    expiresIn: int
+    devCode: Optional[str] = None
+
+
+class SmsVerifyOtpRequest(BaseModel):
+    phone: str
+    code: str
+

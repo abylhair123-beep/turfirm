@@ -5,6 +5,7 @@ import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
+import 'agency_dashboard_screen.dart';
 import 'auth_screen.dart';
 import 'bookings_list_screen.dart';
 import 'create_tour_screen.dart';
@@ -217,37 +218,78 @@ class _AuthenticatedView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.business_center_rounded, color: Colors.white, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      LocaleService.tr('agency_cabinet'),
-                      style: AppText.sora(size: 15, weight: FontWeight.w700, color: Colors.white),
+                    Row(
+                      children: [
+                        const Icon(Icons.business_center_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          LocaleService.tr('agency_cabinet'),
+                          style: AppText.sora(size: 15, weight: FontWeight.w700, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('B2B PRO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Публикуйте авторские и пакетные туры для тысяч туристов на Sapar',
+                  'Аналитика продаж, Канбан туристов, экспорт в Excel и управление турами',
                   style: AppText.work(size: 12.5, color: const Color(0xFFBFEAE4)),
                 ),
                 const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CreateTourScreen()),
-                    );
-                  },
-                  icon: const Icon(Icons.add_rounded, color: Color(0xFF0E7C77), size: 18),
-                  label: Text(
-                    LocaleService.tr('add_new_tour'),
-                    style: const TextStyle(color: Color(0xFF0E7C77), fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const AgencyDashboardScreen()),
+                          );
+                        },
+                        icon: const Icon(Icons.dashboard_rounded, color: Color(0xFF0E7C77), size: 18),
+                        label: const Text(
+                          'Панель B2B',
+                          style: TextStyle(color: Color(0xFF0E7C77), fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CreateTourScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                      label: Text(
+                        LocaleService.tr('add_new_tour'),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.white54),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

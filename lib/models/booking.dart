@@ -78,3 +78,5 @@ class BookingResult {
     );
   }
 }
+
+typedef Booking = BookingResult;

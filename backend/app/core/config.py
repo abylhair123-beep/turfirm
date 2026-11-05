@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     backup_retention_days: int = 7
     backup_local_dir: str = "backups"
 
+    # --- SMS-шлюз и авторизация по телефону (Mobizon / KazInfoTech / Twilio) ---
+    sms_provider: str = "mock"  # "mock", "mobizon", "kazinfotech", "twilio"
+    sms_api_key: Optional[str] = None
+    sms_api_url: Optional[str] = None
+    sms_sender_name: str = "Sapar"
+    sms_otp_expire_seconds: int = 300  # 5 минут срок действия OTP-кода
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

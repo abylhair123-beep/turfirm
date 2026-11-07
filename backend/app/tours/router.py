@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -12,7 +13,14 @@ from app.core.limiter import limiter
 from app.database import get_db
 from app.dependencies import get_current_agency_user, get_current_user
 from app.tours.models import Tour
-from app.tours.schemas import CategoryItem, TourCreate, TourResponse, TourUpdate
+from app.tours.schemas import (
+    CategoryItem,
+    TourCreate,
+    TourPromoteRequest,
+    TourPromoteResponse,
+    TourResponse,
+    TourUpdate,
+)
 
 router = APIRouter(prefix="/tours", tags=["Туры"])
 
@@ -42,6 +50,10 @@ def _tour_to_response(tour: Tour) -> TourResponse:
         photoUrl=tour.photo_url,
         description=tour.description,
         included=tour.included or [],
+        isActive=tour.is_active,
+        isPromoted=tour.is_promoted,
+        promotedUntil=tour.promoted_until,
+        promotionTier=tour.promotion_tier,
     )
 
 
@@ -164,7 +176,7 @@ def get_tours(
         )
         query = query.filter(search_filter)
 
-    tours = query.order_by(Tour.rating.desc(), Tour.created_at.desc()).offset(skip).limit(limit).all()
+    tours = query.order_by(Tour.is_promoted.desc(), Tour.rating.desc(), Tour.created_at.desc()).offset(skip).limit(limit).all()
     results = [_tour_to_response(t) for t in tours]
     cache.set(cache_key, [r.model_dump() for r in results], ttl_seconds=settings.cache_tours_ttl_seconds)
     return results
@@ -304,6 +316,87 @@ def delete_tour(
         raise HTTPException(status_code=403, detail="Нет прав на удаление этого тура")
 
     db.delete(tour)
+    db.commit()
+    cache.delete_pattern("sapar:cache:tours:*")
+    return None
+
+
+@router.post("/{tour_id}/promote", response_model=TourPromoteResponse)
+def promote_tour(
+    tour_id: str,
+    payload: TourPromoteRequest,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Покупка рекламного продвижения тура в каталоге Sapar."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на продвижение этого тура")
+
+    # Расчет стоимости тарифа
+    pricing = {
+        3: 15000,
+        7: 29000,
+        30: 79000,
+    }
+    days = payload.days if payload.days in pricing else 7
+    fee = pricing.get(days, days * 4000)
+
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=days)
+
+    tour.is_promoted = True
+    tour.promoted_until = until
+    tour.promotion_tier = payload.tier or "top"
+    db.add(tour)
+
+    # Фиксация финансового дохода в журнале администратора
+    from app.admin.models import FinancialRecord
+    fin_record = FinancialRecord(
+        type="income",
+        category="advertising",
+        amount=fee,
+        title=f"Реклама тура: {tour.title} ({days} дн.)",
+        description=f"Турагентство: {tour.agency_name}. Оплата через {payload.payment_method}. Тариф: {payload.tier}",
+        reference_id=tour.id,
+    )
+    db.add(fin_record)
+
+    db.commit()
+    db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
+
+    return TourPromoteResponse(
+        tourId=tour.id,
+        title=tour.title,
+        isPromoted=tour.is_promoted,
+        promotedUntil=tour.promoted_until,
+        promotionTier=tour.promotion_tier,
+        amountPaid=fee,
+        message=f"Тур успешно поднят в ТОП выдачи на {days} дней!",
+    )
+
+
+@router.delete("/{tour_id}/promote", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_tour_promotion(
+    tour_id: str,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Отключение рекламного продвижения тура."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на управление рекламой этого тура")
+
+    tour.is_promoted = False
+    tour.promoted_until = None
+    tour.promotion_tier = None
     db.commit()
     cache.delete_pattern("sapar:cache:tours:*")
     return None

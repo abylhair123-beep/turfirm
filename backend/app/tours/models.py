@@ -33,6 +33,9 @@ class Tour(Base):
     description = Column(Text, nullable=False)
     included = Column(JSON, default=list, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_promoted = Column(Boolean, default=False, nullable=False, index=True)
+    promoted_until = Column(DateTime, nullable=True)
+    promotion_tier = Column(String(30), nullable=True)  # "top", "vip", "boost"
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships

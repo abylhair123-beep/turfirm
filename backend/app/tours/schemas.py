@@ -21,6 +21,9 @@ class TourBase(BaseModel):
     photo_url: Optional[str] = Field(default=None, alias="photoUrl")
     description: str
     included: List[str] = Field(default_factory=list)
+    is_promoted: bool = Field(default=False, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
@@ -57,6 +60,9 @@ class TourUpdate(BaseModel):
     rating: Optional[float] = None
     reviews_count: Optional[int] = Field(default=None, alias="reviewsCount")
     is_active: Optional[bool] = Field(default=None, alias="isActive")
+    is_promoted: Optional[bool] = Field(default=None, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
@@ -87,10 +93,38 @@ class TourResponse(BaseModel):
     photo_url: Optional[str] = Field(default=None, alias="photoUrl")
     description: str
     included: List[str]
+    is_active: bool = Field(default=True, alias="isActive")
+    is_promoted: bool = Field(default=False, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
         "from_attributes": True,
+    }
+
+
+class TourPromoteRequest(BaseModel):
+    days: int = Field(default=7, description="Срок продвижения в днях: 3, 7 или 30")
+    tier: str = Field(default="top", description="Тариф продвижения: boost, top, vip")
+    payment_method: str = Field(default="Kaspi Pay", alias="paymentMethod")
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class TourPromoteResponse(BaseModel):
+    tour_id: str = Field(alias="tourId")
+    title: str
+    is_promoted: bool = Field(alias="isPromoted")
+    promoted_until: datetime = Field(alias="promotedUntil")
+    promotion_tier: str = Field(alias="promotionTier")
+    amount_paid: int = Field(alias="amountPaid")
+    message: str
+
+    model_config = {
+        "populate_by_name": True,
     }
 
 

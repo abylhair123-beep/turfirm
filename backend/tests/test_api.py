@@ -740,6 +740,70 @@ def test_admin_financial_balance_and_records():
     assert updated_summary["totalIncome"] == initial_income + 250000
 
 
+def test_tour_promotion_ranking_and_accounting():
+    """Тест системы рекламы туров:
+    - Покупка продвижения тура агентством
+    - Флаг isPromoted и ранжирование выше обычных туров
+    - Фиксация оплаты рекламы в финансовом отчёте
+    - Отключение продвижения
+    """
+    # 1. Логин турагентства Turan Travel
+    agency_login = client.post("/api/v1/auth/login", json={
+        "email": "turan@sapar.kz",
+        "password": "Agency123!",
+    })
+    assert agency_login.status_code == 200
+    agency_token = agency_login.json()["access_token"]
+    agency_headers = {"Authorization": f"Bearer {agency_token}"}
+
+    # Получаем тур агентства
+    tours_res = client.get("/api/v1/tours?agencyId=agn-turan-travel")
+    assert tours_res.status_code == 200
+    tours = tours_res.json()
+    assert len(tours) > 0
+    target_tour = tours[-1]  # берём тур, который изначально не в самом топе
+    tour_id = target_tour["id"]
+
+    # 2. Покупка рекламного тарифа «Тур недели» (7 дней, 29 000 ₸)
+    promote_res = client.post(f"/api/v1/tours/{tour_id}/promote", headers=agency_headers, json={
+        "days": 7,
+        "tier": "top",
+        "paymentMethod": "Kaspi Pay",
+    })
+    assert promote_res.status_code == 200
+    promote_data = promote_res.json()
+    assert promote_data["isPromoted"] is True
+    assert promote_data["promotionTier"] == "top"
+    assert promote_data["amountPaid"] == 29000
+
+    # 3. Проверка ранжирования: проплаченный тур поднимается на 1-е место в выдаче
+    all_tours_res = client.get("/api/v1/tours")
+    assert all_tours_res.status_code == 200
+    all_tours = all_tours_res.json()
+    assert all_tours[0]["id"] == tour_id
+    assert all_tours[0]["isPromoted"] is True
+
+    # 4. Проверка финансового отчёта админа: сумма 29 000 ₸ учтена в доходах от рекламы
+    admin_login = client.post("/api/v1/auth/login", json={
+        "email": "admin@sapar.kz",
+        "password": "Admin123!",
+    })
+    admin_token = admin_login.json()["access_token"]
+    finances = client.get("/api/v1/admin/finances/summary", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    ad_item = next((item for item in finances["incomeBreakdown"] if item["category"] == "advertising"), None)
+    assert ad_item is not None
+    assert ad_item["amount"] >= 29000
+
+    # 5. Отмена/завершение продвижения
+    cancel_res = client.delete(f"/api/v1/tours/{tour_id}/promote", headers=agency_headers)
+    assert cancel_res.status_code == 204
+
+    # Проверка, что флаг сбросился
+    check_tour = client.get(f"/api/v1/tours/{tour_id}").json()
+    assert check_tour["isPromoted"] is False
+
+
+
 
 
 

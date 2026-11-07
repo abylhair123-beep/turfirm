@@ -465,23 +465,61 @@ class _HeroState extends State<_Hero> {
           Positioned(
             left: 20,
             bottom: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.ink.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const AppIcon(AppIcons.pin, size: 13, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(
-                    tour.destination,
-                    style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white),
+            child: Row(
+              children: [
+                if (tour.isPromoted) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'Реклама • ТОП',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AppIcon(AppIcons.pin, size: 13, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        tour.destination,
+                        style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
 

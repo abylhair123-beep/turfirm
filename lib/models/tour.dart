@@ -28,6 +28,9 @@ class Tour {
     required this.description,
     required this.included,
     this.isActive = true,
+    this.isPromoted = false,
+    this.promotedUntil,
+    this.promotionTier,
   }) : _photoUrls = photoUrls;
 
   final String id;
@@ -54,6 +57,9 @@ class Tour {
   final String description;
   final List<String> included;
   final bool isActive;
+  final bool isPromoted;
+  final DateTime? promotedUntil;
+  final String? promotionTier;
 
   /// Список всех фото тура (если передан photoUrls — используем его,
   /// иначе оборачиваем одиночный photoUrl, либо пустой список).
@@ -134,6 +140,13 @@ class Tour {
       description: json['description'] as String? ?? '',
       included: (json['included'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       isActive: json['isActive'] as bool? ?? json['is_active'] as bool? ?? true,
+      isPromoted: json['isPromoted'] as bool? ?? json['is_promoted'] as bool? ?? false,
+      promotedUntil: json['promotedUntil'] != null
+          ? DateTime.tryParse(json['promotedUntil'].toString())
+          : json['promoted_until'] != null
+              ? DateTime.tryParse(json['promoted_until'].toString())
+              : null,
+      promotionTier: json['promotionTier'] as String? ?? json['promotion_tier'] as String?,
     );
   }
 
@@ -162,6 +175,10 @@ class Tour {
       'photoUrls': photoUrls,
       'description': description,
       'included': included,
+      'isActive': isActive,
+      'isPromoted': isPromoted,
+      if (promotedUntil != null) 'promotedUntil': promotedUntil!.toIso8601String(),
+      if (promotionTier != null) 'promotionTier': promotionTier,
     };
   }
 }

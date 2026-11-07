@@ -113,6 +113,33 @@ void main() {
       expect(map['durationNights'], 7);
     });
 
+    test('Tour promotion attributes (isPromoted, promotedUntil, promotionTier)', () {
+      final jsonPromoted = {
+        'id': 'tour-promo-1',
+        'agency': 'Turan Travel',
+        'destination': 'Анталия',
+        'title': 'VIP Тур в Риксос',
+        'nights': '7 ночей',
+        'dates': '10-17 июня',
+        'meal': 'Всё включено',
+        'priceFrom': 350000,
+        'description': 'Супер отдых',
+        'included': ['Перелет'],
+        'isPromoted': true,
+        'promotedUntil': '2026-11-14T12:00:00Z',
+        'promotionTier': 'top',
+      };
+
+      final tour = Tour.fromJson(jsonPromoted);
+      expect(tour.isPromoted, isTrue);
+      expect(tour.promotionTier, 'top');
+      expect(tour.promotedUntil, isNotNull);
+
+      final map = tour.toJson();
+      expect(map['isPromoted'], isTrue);
+      expect(map['promotionTier'], 'top');
+    });
+
     test('BookingRequest serialization', () {
       const request = BookingRequest(
         tourId: 'antalya-7n',

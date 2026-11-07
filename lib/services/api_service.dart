@@ -1258,4 +1258,61 @@ class ApiService {
     }
     return null;
   }
+
+  // ==================== СИСТЕМА РЕКЛАМЫ И ПРОДВИЖЕНИЯ ТУРОВ ====================
+
+  /// Покупка рекламного продвижения тура в ТОП
+  static Future<Map<String, dynamic>?> promoteTour({
+    required String tourId,
+    int days = 7,
+    String tier = 'top',
+    String paymentMethod = 'Kaspi Pay',
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId/promote');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'days': days,
+              'tier': tier,
+              'paymentMethod': paymentMethod,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Тур успешно поднят в ТОП!',
+          'isPromoted': data['isPromoted'] ?? true,
+          'promotedUntil': data['promotedUntil'],
+          'amountPaid': data['amountPaid'] ?? 29000,
+        };
+      }
+      return {
+        'success': false,
+        'message': data['detail'] ?? 'Не удалось оформить продвижение',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Сетевая ошибка: $e',
+      };
+    }
+  }
+
+  /// Отключение рекламного продвижения
+  static Future<bool> cancelTourPromotion(String tourId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId/promote');
+      final response = await http.delete(uri, headers: _headers()).timeout(const Duration(seconds: 5));
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] cancelTourPromotion error: $e');
+      return false;
+    }
+  }
 }

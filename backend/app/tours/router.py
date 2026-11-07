@@ -1,11 +1,14 @@
 from typing import List, Optional
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.agencies.models import Agency
 from app.auth.models import User
+from app.core.cache import cache
+from app.core.config import settings
+from app.core.limiter import limiter
 from app.database import get_db
 from app.dependencies import get_current_agency_user, get_current_user
 from app.tours.models import Tour
@@ -39,7 +42,12 @@ def _tour_to_response(tour: Tour) -> TourResponse:
 
 
 @router.get("/categories", response_model=List[CategoryItem])
-def get_categories(db: Session = Depends(get_db)):
+def get_categories(request: Request, db: Session = Depends(get_db)):
+    cache_key = "sapar:cache:tours:categories"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return [CategoryItem(**item) for item in cached]
+
     results = (
         db.query(Tour.category, func.count(Tour.id))
         .filter(Tour.is_active == True)
@@ -51,11 +59,15 @@ def get_categories(db: Session = Depends(get_db)):
         # Default fallback categories
         for name in ["Пляжный отдых", "Горы", "Визовые туры", "Санатории", "Круизы"]:
             categories.append(CategoryItem(name=name, count=0))
+
+    cache.set(cache_key, [c.model_dump() for c in categories], ttl_seconds=settings.cache_categories_ttl_seconds)
     return categories
 
 
 @router.get("", response_model=List[TourResponse])
+@limiter.limit(settings.rate_limit_tours)
 def get_tours(
+    request: Request,
     category: Optional[str] = Query(None, description="Фильтр по категории (Пляжный отдых, Горы и т.д.)"),
     search: Optional[str] = Query(None, description="Поиск по названию, городу или агентству"),
     departure_city: Optional[str] = Query(None, alias="departureCity", description="Город вылета"),
@@ -66,6 +78,21 @@ def get_tours(
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
+    cache_key = cache.generate_key(
+        "tours:list",
+        cat=category,
+        q=search,
+        dep=departure_city,
+        min_p=min_price,
+        max_p=max_price,
+        ag=agency_id,
+        skip=skip,
+        lim=limit,
+    )
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return [TourResponse(**item) for item in cached]
+
     query = db.query(Tour).filter(Tour.is_active == True)
 
     if category and category != "Все":
@@ -93,7 +120,9 @@ def get_tours(
         query = query.filter(search_filter)
 
     tours = query.order_by(Tour.rating.desc(), Tour.created_at.desc()).offset(skip).limit(limit).all()
-    return [_tour_to_response(t) for t in tours]
+    results = [_tour_to_response(t) for t in tours]
+    cache.set(cache_key, [r.model_dump() for r in results], ttl_seconds=settings.cache_tours_ttl_seconds)
+    return results
 
 
 @router.get("/{tour_id}", response_model=TourResponse)
@@ -153,6 +182,7 @@ def create_tour(
     db.add(tour)
     db.commit()
     db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
     return _tour_to_response(tour)
 
 
@@ -178,6 +208,28 @@ def update_tour(
 
     db.commit()
     db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
+    return _tour_to_response(tour)
+
+
+@router.patch("/{tour_id}/toggle-active", response_model=TourResponse)
+def toggle_tour_active(
+    tour_id: str,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Быстрая пауза или возобновление продаж тура в 1 клик (is_active = not is_active)."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на управление этим туром")
+
+    tour.is_active = not tour.is_active
+    db.commit()
+    db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
     return _tour_to_response(tour)
 
 
@@ -196,4 +248,5 @@ def delete_tour(
 
     db.delete(tour)
     db.commit()
+    cache.delete_pattern("sapar:cache:tours:*")
     return None

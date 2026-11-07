@@ -22,6 +22,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # Кэш и брокер Redis для ускорения туров и ограничения запросов (Rate Limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: sapar_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - sapar_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # Бэкенд FastAPI
   sapar-backend:
     build:
@@ -32,6 +47,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
@@ -40,9 +57,32 @@ services:
       - DEBUG=false
       # Бэкенд обращается к Postgres по имени сервиса "postgres" внутри docker-сети
       - DATABASE_URL=postgresql+psycopg2://sapar:sapar_secret@postgres:5432/sapar
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
       - SECRET_KEY=sapar-production-secure-key-2026
+      - SENTRY_DSN=${SENTRY_DSN:-}
     volumes:
       - ./data:/app/data
+      - ./backups:/app/backups
+
+  # Автоматический бэкап БД по расписанию (cron: ежедневно в 03:00)
+  db-backup:
+    image: postgres:16-alpine
+    container_name: sapar_db_backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    entrypoint: |
+      /bin/sh -c '
+      echo "0 3 * * * pg_dump -h postgres -U sapar -d sapar --no-owner --no-acl | gzip > /backups/sapar_backup_\$$(date +\%Y\%m\%d_\%H\%M\%S).sql.gz && find /backups -name \"sapar_backup_*.sql.gz\" -mtime +7 -delete" > /var/spool/cron/crontabs/root
+      crond -f -l 2
+      '
+    environment:
+      - PGPASSWORD=sapar_secret
 
 volumes:
   sapar_pgdata:
+  sapar_redisdata:

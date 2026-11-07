@@ -75,6 +75,37 @@ class Settings(BaseSettings):
     s3_public_url: Optional[str] = None    # Базовый URL для отдачи файлов (CDN/публичный MinIO)
     s3_use_ssl: bool = True
 
+    # --- Redis & Кэширование популярных туров и категорий ---
+    redis_url: str = "redis://localhost:6379/0"
+    redis_enabled: bool = True
+    cache_tours_ttl_seconds: int = 600       # 10 минут (5-15 мин по ТЗ)
+    cache_categories_ttl_seconds: int = 900  # 15 минут
+
+    # --- Защита от брутфорса и парсинга (Rate Limiting via slowapi) ---
+    rate_limit_enabled: bool = True
+    rate_limit_auth: str = "5/minute"        # Ограничение на логин и регистрацию
+    rate_limit_tours: str = "60/minute"      # Ограничение на поиск и просмотр каталога
+    rate_limit_storage_uri: Optional[str] = None  # По умолчанию memory:// или redis://
+
+    # --- Мониторинг ошибок Sentry ---
+    sentry_dsn: Optional[str] = None
+    sentry_environment: str = "production"
+    sentry_traces_sample_rate: float = 0.1
+
+    # --- Резервное копирование БД в S3 ---
+    backup_s3_bucket: Optional[str] = None
+    backup_s3_endpoint_url: Optional[str] = None
+    backup_s3_prefix: str = "sapar-db-backups"
+    backup_retention_days: int = 7
+    backup_local_dir: str = "backups"
+
+    # --- SMS-шлюз и авторизация по телефону (Mobizon / KazInfoTech / Twilio) ---
+    sms_provider: str = "mock"  # "mock", "mobizon", "kazinfotech", "twilio"
+    sms_api_key: Optional[str] = None
+    sms_api_url: Optional[str] = None
+    sms_sender_name: str = "Sapar"
+    sms_otp_expire_seconds: int = 300  # 5 минут срок действия OTP-кода
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

@@ -1,11 +1,13 @@
+from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.agencies.models import Agency
 from app.auth.models import User
 from app.bookings.models import Booking
 from app.bookings.schemas import BookingCreate, BookingResponse, BookingStatusUpdate
+from app.bookings.voucher import build_travel_voucher_pdf
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_user_optional
 from app.notifications.service import (
@@ -138,6 +140,55 @@ def get_booking(booking_id: str, db: Session = Depends(get_db)):
     if not booking:
         raise HTTPException(status_code=404, detail="Бронирование не найдено")
     return _booking_to_response(booking)
+
+
+@router.get("/{booking_id}/voucher.pdf", response_class=Response)
+def get_booking_voucher_pdf(booking_id: str, db: Session = Depends(get_db)):
+    """Генерация официального туристического PDF-ваучера с QR-кодом, отелем, трансфером и страховкой."""
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Бронирование не найдено")
+
+    tour = db.query(Tour).filter(Tour.id == booking.tour_id).first()
+    agency = db.query(Agency).filter(Agency.id == booking.agency_id).first()
+
+    pdf_bytes = build_travel_voucher_pdf(booking, tour, agency)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="sapar_voucher_{booking.id}.pdf"',
+            "Content-Type": "application/pdf",
+        },
+    )
+
+
+@router.get("/{booking_id}/verify")
+def verify_booking_voucher(booking_id: str, db: Session = Depends(get_db)):
+    """Публичная верификация подлинности ваучера при сканировании QR-кода."""
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        return {
+            "valid": False,
+            "message": "Ваучер не найден или недействителен в системе SAPAR",
+        }
+
+    tour = db.query(Tour).filter(Tour.id == booking.tour_id).first()
+    agency = db.query(Agency).filter(Agency.id == booking.agency_id).first()
+
+    return {
+        "valid": True,
+        "bookingId": booking.id,
+        "status": booking.status,
+        "customerName": booking.customer_name,
+        "guestsCount": booking.guests_count,
+        "tourTitle": tour.title if tour else "—",
+        "dates": tour.dates if tour else "—",
+        "agencyName": agency.name if agency else "—",
+        "verifiedAt": datetime.now(timezone.utc).isoformat(),
+        "message": "Туристический ваучер подлинный, подтвержден и зарегистрирован в экосистеме SAPAR",
+    }
 
 
 @router.patch("/{booking_id}/status", response_model=BookingResponse)

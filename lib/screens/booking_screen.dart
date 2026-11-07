@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/booking.dart';
 import '../models/tour.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/app_icon.dart';
@@ -101,6 +102,7 @@ class _BookingScreenState extends State<BookingScreen> {
             context: context,
             payment: paymentData,
             onPaymentSuccess: () {
+              NotificationService.simulateBookingConfirmed(destination: widget.tour.destination);
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => SuccessScreen(
@@ -116,6 +118,7 @@ class _BookingScreenState extends State<BookingScreen> {
       }
 
       if (mounted) {
+        NotificationService.simulateBookingConfirmed(destination: widget.tour.destination);
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => SuccessScreen(

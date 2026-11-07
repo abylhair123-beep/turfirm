@@ -1,11 +1,11 @@
 {
-    "name": "turfirm",
-    "short_name": "turfirm",
+    "name": "SAPAR — Бронирование Туров",
+    "short_name": "SAPAR",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D3836",
+    "theme_color": "#0D3836",
+    "description": "Сервис поиска и бронирования туров по Казахстану и миру.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

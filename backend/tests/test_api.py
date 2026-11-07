@@ -29,6 +29,14 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    from app.core.limiter import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
 def override_get_db():
     try:
         db = TestingSessionLocal()
@@ -266,3 +274,196 @@ def test_favorites():
 
     check_again = client.get("/api/v1/favorites/check/antalya-7n", headers=headers)
     assert check_again.json()["isFavorite"] is False
+
+
+def test_health_extended():
+    res = client.get("/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert "redis" in data
+    assert "rate_limiting" in data
+    assert "sentry" in data
+
+
+def test_rate_limiting_enforcement():
+    """Проверка срабатывания Rate Limiting (slowapi 5/minute) при серии запросов."""
+    from app.core.limiter import limiter
+    limiter.reset()
+
+    # 5 запросов разрешены
+    for _ in range(5):
+        resp = client.post("/api/v1/auth/login", json={
+            "email": "invalid@sapar.kz",
+            "password": "wrongpassword",
+        })
+        # Возвращается 401 Unauthorized (логика бэкенда)
+        assert resp.status_code in (401, 200)
+
+    # 6-й запрос блокируется лимитером (429 Too Many Requests)
+    exceeded_resp = client.post("/api/v1/auth/login", json={
+        "email": "invalid@sapar.kz",
+        "password": "wrongpassword",
+    })
+    assert exceeded_resp.status_code == 429
+    limiter.reset()
+
+
+def test_redis_cache_manager():
+    """Проверка генерации ключей и отказоустойчивости менеджера кэша."""
+    from app.core.cache import cache
+
+    # Генерация детерминированных ключей
+    key1 = cache.generate_key("tours", cat="Пляжный отдых", min_p=100000)
+    key2 = cache.generate_key("tours", cat="Пляжный отдых", min_p=100000)
+    key3 = cache.generate_key("tours", cat="Горы", min_p=100000)
+    assert key1 == key2
+    assert key1 != key3
+
+    # Если Redis оффлайн, get/set/delete не должны вызывать исключений
+    val = cache.get("non_existent_key")
+    assert val is None
+    cache.delete("non_existent_key")
+    cache.delete_pattern("sapar:cache:tours:*")
+
+
+def test_database_backup_module():
+    """Проверка структуры и парсера параметров в scripts/backup_db.py."""
+    from scripts.backup_db import parse_db_url
+    params = parse_db_url("postgresql+psycopg2://testuser:testpass@db.sapar.kz:5432/sapardb")
+    assert params["user"] == "testuser"
+    assert params["password"] == "testpass"
+    assert params["host"] == "db.sapar.kz"
+    assert params["port"] == 5432
+    assert params["dbname"] == "sapardb"
+
+
+def test_booking_pdf_voucher_and_verification():
+    """Тест генерации PDF-ваучера поездки и публичной верификации."""
+    # 1. Создаем тестовое бронирование
+    booking_res = client.post("/api/v1/bookings", json={
+        "tourId": "antalya-7n",
+        "customerName": "Айдар Сериков",
+        "customerPhone": "+7 777 555 44 33",
+        "customerEmail": "aidar@sapar.kz",
+        "guestsCount": 2,
+        "paymentMethod": "Kaspi Pay",
+    })
+    assert booking_res.status_code == 201
+    booking_id = booking_res.json()["id"]
+
+    # 2. Запрашиваем PDF-ваучер
+    pdf_res = client.get(f"/api/v1/bookings/{booking_id}/voucher.pdf")
+    assert pdf_res.status_code == 200
+    assert pdf_res.headers["content-type"] == "application/pdf"
+    assert pdf_res.content.startswith(b"%PDF")
+    assert len(pdf_res.content) > 1000
+
+    # 3. Проверяем QR-ссылку верификации
+    verify_res = client.get(f"/api/v1/bookings/{booking_id}/verify")
+    assert verify_res.status_code == 200
+    data = verify_res.json()
+    assert data["valid"] is True
+    assert data["bookingId"] == booking_id
+    assert data["customerName"] == "Айдар Сериков"
+    assert "message" in data
+
+
+def test_sms_authentication_flow():
+    """Тест авторизации по номеру телефона через SMS и 4-значный OTP-код."""
+    from app.core.cache import cache
+    from app.auth.sms_service import normalize_phone
+    test_phone = "+7 777 888 99 00"
+    clean = normalize_phone(test_phone)
+    cache.delete(f"sapar:sms_cooldown:{clean}")
+    cache.delete(f"sapar:otp:{clean}")
+
+    # 1. Запрос 4-значного OTP-кода
+    send_res = client.post("/api/v1/auth/sms/send-otp", json={
+        "phone": test_phone,
+    })
+    assert send_res.status_code == 200
+    send_data = send_res.json()
+    assert send_data["status"] == "ok"
+    assert "expiresIn" in send_data
+    otp_code = send_data.get("devCode")
+    assert otp_code is not None
+    assert len(str(otp_code)) == 4
+
+    # 2. Проверка неверного кода (должен вернуть 400)
+    invalid_verify = client.post("/api/v1/auth/sms/verify-otp", json={
+        "phone": test_phone,
+        "code": "0000",
+    })
+    assert invalid_verify.status_code == 400
+
+    # 3. Проверка правильного кода (должен вернуть Token)
+    verify_res = client.post("/api/v1/auth/sms/verify-otp", json={
+        "phone": test_phone,
+        "code": str(otp_code),
+    })
+    assert verify_res.status_code == 200
+    token_data = verify_res.json()
+    assert "access_token" in token_data
+    assert token_data["token_type"] == "bearer"
+    assert token_data["role"] == "client"
+
+    # 4. Проверяем доступ к /me с полученным JWT-токеном
+    me_res = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token_data['access_token']}"},
+    )
+    assert me_res.status_code == 200
+    assert me_res.json()["phone"] == "+77778889900"
+
+
+def test_agency_b2b_dashboard():
+    """Тест B2B функционала агентства: аналитика, канбан броней, экспорт в Excel и пауза тура."""
+    # 1. Авторизация менеджера турагентства Turan Travel
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "turan@sapar.kz",
+        "password": "Agency123!",
+    })
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Получение расширенной аналитики (выручка, 10% комиссия, средний чек, график)
+    analytics_res = client.get("/api/v1/agencies/me/analytics?period=month", headers=headers)
+    assert analytics_res.status_code == 200
+    analytics = analytics_res.json()
+    assert "totalRevenueKzt" in analytics
+    assert "commissionKzt" in analytics
+    assert "averageCheckKzt" in analytics
+    assert "statusCounts" in analytics
+    assert "salesChart" in analytics
+    assert isinstance(analytics["salesChart"], list)
+    assert len(analytics["salesChart"]) > 0
+
+    # 3. Список заявок туристов (Канбан)
+    bookings_res = client.get("/api/v1/agencies/me/bookings", headers=headers)
+    assert bookings_res.status_code == 200
+    bookings = bookings_res.json()
+    assert isinstance(bookings, list)
+
+    # 4. Выгрузка в Excel (XLSX)
+    excel_res = client.get("/api/v1/agencies/me/bookings/export-xlsx", headers=headers)
+    assert excel_res.status_code == 200
+    assert "spreadsheetml.sheet" in excel_res.headers["content-type"]
+    assert len(excel_res.content) > 1000
+
+    # 5. Управление туром: быстрая пауза (снятие с продажи) и возобновление
+    # Находим тур агентства
+    tours_res = client.get("/api/v1/agencies/me/tours", headers=headers)
+    assert tours_res.status_code == 200
+    tours = tours_res.json()
+    if tours:
+        first_tour_id = tours[0]["id"]
+        # Тогл активности
+        toggle_res = client.patch(f"/api/v1/tours/{first_tour_id}/toggle-active", headers=headers)
+        assert toggle_res.status_code == 200
+        # Восстановление активности
+        toggle_back = client.patch(f"/api/v1/tours/{first_tour_id}/toggle-active", headers=headers)
+        assert toggle_back.status_code == 200
+
+
+

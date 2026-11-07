@@ -1,0 +1,6 @@
+# Пример конфигурации подписи Android Release Keystore для Google Play
+# Скопируйте этот файл как android/key.properties и укажите реальные пароли
+storePassword=your_keystore_password
+keyPassword=your_key_password
+keyAlias=sapar_release
+storeFile=sapar-release.jks

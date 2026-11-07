@@ -130,6 +130,7 @@ class _CreateTourScreenState extends State<CreateTourScreen> {
           'departureCity': 'Алматы',
           'priceFrom': int.tryParse(_priceCtrl.text.trim()) ?? 0,
           'photoUrl': photoUrl,
+          'photoUrls': [photoUrl],
           'description': _descriptionCtrl.text.trim(),
           'included': <String>[],
         },

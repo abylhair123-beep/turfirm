@@ -232,6 +232,82 @@ class ApiService {
     await prefs.remove('auth_user');
   }
 
+  /// Запрос 4-значного OTP-кода по SMS
+  static Future<Map<String, dynamic>> sendSmsOtp(String phone) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/sms/send-otp');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'phone': phone.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': data['message'], 'devCode': data['devCode']};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'Ошибка отправки SMS'};
+    } catch (e) {
+      return {'success': false, 'message': 'Сетевая ошибка: $e'};
+    }
+  }
+
+  /// Верификация OTP-кода из SMS и вход/регистрация
+  static Future<AppUser?> verifySmsOtp(String phone, String code) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/sms/verify-otp');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'phone': phone.trim(), 'code': code.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        _token = data['access_token'] as String?;
+        _currentUser = AppUser(
+          id: data['user_id'] as String? ?? '',
+          email: data['email'] as String? ?? '',
+          fullName: data['full_name'] as String? ?? 'Турист',
+          phone: phone,
+          role: data['role'] as String? ?? 'client',
+        );
+        userNotifier.value = _currentUser;
+
+        final prefs = await SharedPreferences.getInstance();
+        if (_token != null) await prefs.setString('auth_token', _token!);
+        await prefs.setString('auth_user', jsonEncode(_currentUser!.toJson()));
+        return _currentUser;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] verifySmsOtp error: $e');
+    }
+    return null;
+  }
+
+  /// Получить URL для открытия или скачивания официального PDF-ваучера
+  static String getVoucherPdfUrl(String bookingId) {
+    return '$baseUrl/bookings/$bookingId/voucher.pdf';
+  }
+
+  /// Скачивание бинарного PDF-файла ваучера
+  static Future<Uint8List?> downloadVoucherPdf(String bookingId) async {
+    try {
+      final uri = Uri.parse(getVoucherPdfUrl(bookingId));
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] downloadVoucherPdf error: $e');
+    }
+    return null;
+  }
+
   // ==================== ТУРЫ ====================
 
   /// Получение каталога туров с поддержкой фильтрации
@@ -650,5 +726,127 @@ class ApiService {
       debugPrint('[ApiService] Create tour error: $e');
     }
     return null;
+  }
+
+  // ==================== B2B ПОРТАЛ ТУРАГЕНТСТВ ====================
+
+  /// Получение всех туров агентства (включая неактивные)
+  static Future<List<Tour>> getAgencyTours() async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/tours');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => Tour.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAgencyTours error: $e');
+    }
+    return [];
+  }
+
+  /// Обновление параметров тура (цены, даты, описание, активность)
+  static Future<Tour?> updateTour(String tourId, Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId');
+      final response = await http
+          .put(
+            uri,
+            headers: _headers(),
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return Tour.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] updateTour error: $e');
+    }
+    return null;
+  }
+
+  /// Быстрая пауза / снятие с продажи в 1 клик
+  static Future<Tour?> toggleTourActive(String tourId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId/toggle-active');
+      final response = await http.patch(uri, headers: _headers()).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return Tour.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] toggleTourActive error: $e');
+    }
+    return null;
+  }
+
+  /// Список бронирований клиентов агентства (для Канбан-доски)
+  static Future<List<Booking>> getAgencyBookings({String? status, String? search}) async {
+    try {
+      final queryParams = <String, String>{};
+      if (status != null && status.isNotEmpty && status != 'all') {
+        queryParams['status'] = status;
+      }
+      if (search != null && search.trim().isNotEmpty) {
+        queryParams['search'] = search.trim();
+      }
+      final uri = Uri.parse('$baseUrl/agencies/me/bookings').replace(
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => Booking.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAgencyBookings error: $e');
+    }
+    return [];
+  }
+
+  /// Смена статуса бронирования в Канбан-доске (confirmed, voucher_issued, completed, cancelled)
+  static Future<Booking?> updateBookingStatus(String bookingId, String newStatus) async {
+    try {
+      final uri = Uri.parse('$baseUrl/bookings/$bookingId/status');
+      final response = await http
+          .patch(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({'status': newStatus}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return Booking.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] updateBookingStatus error: $e');
+    }
+    return null;
+  }
+
+  /// Расширенная аналитика агентства: выручка, комиссия, средний чек и график продаж
+  static Future<Map<String, dynamic>?> getAgencyAnalytics({String period = 'month'}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/analytics?period=$period');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAgencyAnalytics error: $e');
+    }
+    return null;
+  }
+
+  /// URL выгрузки списка туристов в Excel (XLSX)
+  static String getAgencyBookingsExportUrl({String? status}) {
+    if (status != null && status.isNotEmpty && status != 'all') {
+      return '$baseUrl/agencies/me/bookings/export-xlsx?status=$status';
+    }
+    return '$baseUrl/agencies/me/bookings/export-xlsx';
   }
 }

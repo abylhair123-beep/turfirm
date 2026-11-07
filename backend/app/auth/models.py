@@ -26,3 +26,4 @@ class User(Base):
     reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    referral_campaigns = relationship("ReferralPartner", back_populates="user", cascade="all, delete-orphan")

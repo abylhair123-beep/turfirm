@@ -8,6 +8,7 @@ from app.core.security import get_password_hash
 from app.database import Base, SessionLocal, engine
 from app.favorites.models import Favorite
 from app.payments.models import Payment
+from app.referrals.models import ReferralPartner
 from app.reviews.models import Review
 from app.tours.models import Tour
 
@@ -353,6 +354,47 @@ def seed_data(db: Session) -> None:
 
     db.commit()
     logger.info("Successfully seeded Sapar database!")
+    seed_referrals(db)
+
+
+def seed_referrals(db: Session) -> None:
+    """Сидирование реферальных кампаний для блогеров."""
+    if db.query(ReferralPartner).first():
+        return
+
+    client_user = db.query(User).filter(User.email == "aigerim@mail.kz").first()
+    if not client_user:
+        return
+
+    logger.info("Seeding initial referral campaigns for blogger...")
+    partner1 = ReferralPartner(
+        id="ref-partner-1",
+        user_id=client_user.id,
+        code="TRAVEL_KZ",
+        campaign_name="Instagram Stories (@aigerim_travel)",
+        commission_rate=3.0,
+        fixed_reward=0,
+        clicks_count=142,
+        bookings_count=6,
+        total_earned=44100,
+        balance=44100,
+        is_active=True,
+    )
+    partner2 = ReferralPartner(
+        id="ref-partner-2",
+        user_id=client_user.id,
+        code="SAPAR_SPECIAL",
+        campaign_name="TikTok / Reels",
+        commission_rate=3.0,
+        fixed_reward=0,
+        clicks_count=85,
+        bookings_count=3,
+        total_earned=22050,
+        balance=22050,
+        is_active=True,
+    )
+    db.add_all([partner1, partner2])
+    db.commit()
 
 
 if __name__ == "__main__":

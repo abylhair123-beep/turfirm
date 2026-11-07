@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turfirm/models/booking.dart';
+import 'package:turfirm/models/referral.dart';
 import 'package:turfirm/models/review.dart';
 import 'package:turfirm/models/tour.dart';
 import 'package:turfirm/models/user.dart';
@@ -148,6 +149,107 @@ void main() {
       expect(result.id, 'bk-123');
       expect(result.totalPrice, 499800);
       expect(result.status, 'paid');
+    });
+
+    test('ReferralCampaign and ReferralStats deserialization', () {
+      final campJson = {
+        'id': 'ref-1',
+        'userId': 'usr-blogger',
+        'code': 'TRAVEL_PRO',
+        'campaignName': 'Instagram Stories',
+        'commissionRate': 3.0,
+        'fixedReward': 0,
+        'clicksCount': 120,
+        'bookingsCount': 5,
+        'totalEarned': 36750,
+        'balance': 36750,
+        'referralUrl': 'https://sapar.kz/?ref=TRAVEL_PRO',
+        'isActive': true,
+        'createdAt': '2026-11-01T10:00:00Z',
+      };
+
+      final camp = ReferralCampaign.fromJson(campJson);
+      expect(camp.code, 'TRAVEL_PRO');
+      expect(camp.clicksCount, 120);
+      expect(camp.bookingsCount, 5);
+      expect(camp.totalEarned, 36750);
+      expect(camp.balance, 36750);
+
+      final statsJson = {
+        'totalClicks': 150,
+        'totalBookings': 6,
+        'conversionRate': 4.0,
+        'totalEarned': 44100,
+        'balance': 44100,
+        'campaigns': [campJson],
+        'recentBookings': [
+          {
+            'id': 'BK-1',
+            'bookingId': 'BK-1',
+            'tourTitle': 'Турция, Анталья',
+            'customerName': 'Ерлан',
+            'tourPrice': 245000,
+            'reward': 7350,
+            'status': 'paid',
+            'createdAt': '2026-11-02T12:00:00Z',
+          }
+        ],
+      };
+
+      final stats = ReferralStats.fromJson(statsJson);
+      expect(stats.totalClicks, 150);
+      expect(stats.totalBookings, 6);
+      expect(stats.conversionRate, 4.0);
+      expect(stats.campaigns.length, 1);
+      expect(stats.recentBookings.length, 1);
+      expect(stats.recentBookings.first.reward, 7350);
+
+      final checkJson = {
+        'valid': true,
+        'code': 'TRAVEL_PRO',
+        'campaignName': 'Instagram Stories',
+        'bloggerName': 'Алихан',
+        'discountPercent': 3.0,
+        'message': 'Скидка 3%',
+      };
+      final checkRes = ReferralCheckResult.fromJson(checkJson);
+      expect(checkRes.valid, isTrue);
+      expect(checkRes.bloggerName, 'Алихан');
+      expect(checkRes.discountPercent, 3.0);
+
+      // Booking with referral
+      const req = BookingRequest(
+        tourId: 'antalya',
+        customerName: 'Айбек',
+        customerPhone: '+7 701 000 00 00',
+        customerEmail: 'aibek@mail.kz',
+        guestsCount: 1,
+        paymentMethod: 'Kaspi Pay',
+        referralCode: 'TRAVEL_PRO',
+      );
+      final reqJson = req.toJson();
+      expect(reqJson['referralCode'], 'TRAVEL_PRO');
+
+      final resJson = {
+        'id': 'BK-2',
+        'tourId': 'antalya',
+        'agencyId': 'agn-1',
+        'customerName': 'Айбек',
+        'customerPhone': '+7 701 000 00 00',
+        'customerEmail': 'aibek@mail.kz',
+        'guestsCount': 1,
+        'paymentMethod': 'Kaspi Pay',
+        'tourPrice': 200000,
+        'serviceFee': 9800,
+        'totalPrice': 209800,
+        'status': 'paid',
+        'referralCode': 'TRAVEL_PRO',
+        'referralReward': 6000,
+        'createdAt': '2026-11-03T10:00:00Z',
+      };
+      final bResult = BookingResult.fromJson(resJson);
+      expect(bResult.referralCode, 'TRAVEL_PRO');
+      expect(bResult.referralReward, 6000);
     });
   });
 

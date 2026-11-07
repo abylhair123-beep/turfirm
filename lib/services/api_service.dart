@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
+import '../models/referral.dart';
 import '../models/review.dart';
 import '../models/tour.dart';
 import '../models/user.dart';
@@ -1049,5 +1050,158 @@ class ApiService {
       return '$baseUrl/agencies/me/bookings/export-xlsx?status=$status';
     }
     return '$baseUrl/agencies/me/bookings/export-xlsx';
+  }
+
+  // ==================== РЕФЕРАЛЬНАЯ ПРОГРАММА ДЛЯ БЛОГЕРОВ ====================
+
+  static String? _activeReferralCode;
+
+  /// Активный реферальный код, сохраненный при переходе по ссылке
+  static String? get activeReferralCode => _activeReferralCode;
+
+  static void setActiveReferralCode(String? code) {
+    if (code != null && code.trim().isNotEmpty) {
+      _activeReferralCode = code.trim().toUpperCase();
+    }
+  }
+
+  /// Получение сводной статистики и реферальных ссылок блогера
+  static Future<ReferralStats?> getReferralStats() async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/stats');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralStats.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getReferralStats error: $e');
+    }
+    return null;
+  }
+
+  /// Список кампаний/ссылок блогера
+  static Future<List<ReferralCampaign>> getReferralCampaigns() async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/me');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((e) => ReferralCampaign.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getReferralCampaigns error: $e');
+    }
+    return [];
+  }
+
+  /// Создание новой реферальной ссылки/кампании
+  static Future<ReferralCampaign?> createReferralCampaign({
+    String? code,
+    String? campaignName,
+    double? commissionRate,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/campaigns');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              if (code != null && code.trim().isNotEmpty) 'code': code.trim().toUpperCase(),
+              if (campaignName != null && campaignName.trim().isNotEmpty) 'campaignName': campaignName.trim(),
+              if (commissionRate != null) 'commissionRate': commissionRate,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralCampaign.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createReferralCampaign error: $e');
+    }
+    return null;
+  }
+
+  /// Трекинг клика по реферальной ссылке
+  static Future<bool> trackReferralClick(String code, {String? tourId, String? referrerUrl}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/click');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({
+              'code': code.trim().toUpperCase(),
+              if (tourId != null) 'tourId': tourId,
+              if (referrerUrl != null) 'referrerUrl': referrerUrl,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] trackReferralClick error: $e');
+      return false;
+    }
+  }
+
+  /// Проверка промокода блогера при бронировании
+  static Future<ReferralCheckResult> checkReferralCode(String code) async {
+    try {
+      final clean = code.trim().toUpperCase();
+      final uri = Uri.parse('$baseUrl/referrals/check/$clean');
+      final response = await http.get(uri, headers: _headers(withAuth: false)).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralCheckResult.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] checkReferralCode error: $e');
+    }
+    return ReferralCheckResult(
+      valid: false,
+      code: code,
+      message: 'Не удалось проверить промокод',
+    );
+  }
+
+  /// Запрос на вывод партнерского вознаграждения
+  static Future<Map<String, dynamic>> requestReferralPayout({
+    required int amount,
+    required String paymentDetails,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/payout');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'amount': amount,
+              'paymentDetails': paymentDetails.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Заявка принята',
+          'remainingBalance': data['remainingBalance'] ?? 0,
+        };
+      }
+      return {
+        'success': false,
+        'message': data['detail'] ?? 'Ошибка вывода средств',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Сетевая ошибка: $e',
+      };
+    }
   }
 }

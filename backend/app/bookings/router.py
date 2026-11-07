@@ -54,6 +54,8 @@ def _booking_to_response(b: Booking) -> BookingResponse:
         serviceFee=b.service_fee,
         totalPrice=b.total_price,
         status=b.status,
+        referralCode=b.referral_code,
+        referralReward=b.referral_reward or 0,
         createdAt=b.created_at,
     )
 
@@ -77,6 +79,25 @@ def create_booking(
     guests = max(1, booking_in.guests_count)
     total_price = (tour_price * guests) + service_fee
 
+    # Обработка реферального кода блогера/партнера
+    referral_code = booking_in.referral_code.strip().upper() if booking_in.referral_code and booking_in.referral_code.strip() else None
+    referral_partner = None
+    referral_reward = 0
+    if referral_code:
+        from app.referrals.models import ReferralPartner
+        referral_partner = (
+            db.query(ReferralPartner)
+            .filter(ReferralPartner.code == referral_code, ReferralPartner.is_active.is_(True))
+            .first()
+        )
+        if referral_partner:
+            rate = referral_partner.commission_rate if referral_partner.commission_rate is not None else 3.0
+            referral_reward = int((tour_price * guests) * (rate / 100.0)) + (referral_partner.fixed_reward or 0)
+            referral_partner.bookings_count += 1
+            referral_partner.total_earned += referral_reward
+            referral_partner.balance += referral_reward
+            db.add(referral_partner)
+
     booking = Booking(
         tour_id=tour.id,
         agency_id=tour.agency_id,
@@ -90,6 +111,9 @@ def create_booking(
         service_fee=service_fee,
         total_price=total_price,
         status="paid",  # Mark as paid since user selects payment method and pays
+        referral_code=referral_partner.code if referral_partner else referral_code,
+        referral_reward=referral_reward,
+        referral_partner_id=referral_partner.id if referral_partner else None,
     )
     db.add(booking)
     db.commit()

@@ -578,5 +578,109 @@ def test_email_verification_and_password_recovery():
     assert relogin_res.json()["email"] == test_email
 
 
+def test_referral_system_blogger_flow():
+    """Тест реферальной программы для блогеров:
+    - Автогенерация и кастомные ссылки/промокоды
+    - Трекинг кликов и проверка валидности промокода
+    - Оформление бронирования с реферальным кодом и начисление вознаграждения
+    - Сводная статистика блогера и заявка на вывод средств (Payout)
+    """
+    # 1. Регистрация и логин блогера
+    blogger_email = "blogger_travel@sapar.kz"
+    reg_res = client.post("/api/v1/auth/register", json={
+        "email": blogger_email,
+        "password": "BloggerPassword2026!",
+        "fullName": "Алихан Трэвел",
+        "phone": "+77081112233",
+        "role": "client",
+    })
+    assert reg_res.status_code == 201
+    blogger_token = reg_res.json()["access_token"]
+    blogger_headers = {"Authorization": f"Bearer {blogger_token}"}
+
+    # 2. Получение списка кампаний (должна автосоздаться первая ссылка)
+    me_res = client.get("/api/v1/referrals/me", headers=blogger_headers)
+    assert me_res.status_code == 200
+    campaigns = me_res.json()
+    assert len(campaigns) >= 1
+    initial_code = campaigns[0]["code"]
+    assert "https://sapar.kz/?ref=" in campaigns[0]["referralUrl"]
+
+    # 3. Создание кастомной кампании
+    custom_code = "ALIKHAN_INSTA"
+    create_res = client.post("/api/v1/referrals/campaigns", headers=blogger_headers, json={
+        "code": custom_code,
+        "campaignName": "Instagram Stories 2026",
+        "commissionRate": 3.0,
+    })
+    assert create_res.status_code == 201
+    created_data = create_res.json()
+    assert created_data["code"] == custom_code
+    assert created_data["campaignName"] == "Instagram Stories 2026"
+
+    # 4. Проверка публичного эндпоинта валидации промокода
+    check_ok = client.get(f"/api/v1/referrals/check/{custom_code}")
+    assert check_ok.status_code == 200
+    assert check_ok.json()["valid"] is True
+    assert check_ok.json()["bloggerName"] == "Алихан Трэвел"
+
+    check_fail = client.get("/api/v1/referrals/check/FAKE_CODE_999")
+    assert check_fail.status_code == 200
+    assert check_fail.json()["valid"] is False
+
+    # 5. Трекинг перехода по ссылке (клик)
+    click_res = client.post("/api/v1/referrals/click", json={
+        "code": custom_code,
+        "tourId": "tour-charyn-1",
+        "referrerUrl": "https://instagram.com",
+    })
+    assert click_res.status_code == 200
+    assert click_res.json()["clicksCount"] >= 1
+
+    # 6. Оформление бронирования тура с реферальным кодом
+    # Сначала получим активный тур
+    tours_res = client.get("/api/v1/tours")
+    tour = tours_res.json()[0]
+    tour_price = tour["priceFrom"]
+
+    booking_res = client.post("/api/v1/bookings", json={
+        "tourId": tour["id"],
+        "customerName": "Серик Подписчик",
+        "customerPhone": "+77079998877",
+        "customerEmail": "subscriber@gmail.com",
+        "guestsCount": 2,
+        "paymentMethod": "Kaspi Pay",
+        "referralCode": custom_code,
+    })
+    assert booking_res.status_code == 201
+    booking_data = booking_res.json()
+    assert booking_data["referralCode"] == custom_code
+    expected_reward = int((tour_price * 2) * 0.03)
+    assert booking_data["referralReward"] == expected_reward
+
+    # 7. Проверка обновленной статистики блогера
+    stats_res = client.get("/api/v1/referrals/stats", headers=blogger_headers)
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert stats["totalClicks"] >= 1
+    assert stats["totalBookings"] >= 1
+    assert stats["totalEarned"] >= expected_reward
+    assert stats["balance"] >= expected_reward
+    assert stats["conversionRate"] > 0
+    assert len(stats["recentBookings"]) >= 1
+    assert stats["recentBookings"][0]["customerName"] == "Серик Подписчик"
+
+    # 8. Запрос на вывод средств блогером
+    payout_res = client.post("/api/v1/referrals/payout", headers=blogger_headers, json={
+        "amount": 1000,
+        "paymentDetails": "Kaspi Gold +7 708 111 22 33",
+    })
+    assert payout_res.status_code == 200
+    payout_data = payout_res.json()
+    assert payout_data["status"] == "pending"
+    assert payout_data["remainingBalance"] == stats["balance"] - 1000
+
+
+
 
 

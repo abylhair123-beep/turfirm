@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/review.dart';
 import '../models/tour.dart';
 import '../services/api_service.dart';
@@ -384,6 +385,47 @@ class _HeroState extends State<_Hero> {
               background: AppColors.ink.withValues(alpha: 0.42),
               iconColor: Colors.white,
               onTap: () => Navigator.of(context).pop(),
+            ),
+          ),
+
+          // Кнопка «Поделиться туром / Реферальная ссылка»
+          Positioned(
+            top: 18,
+            right: 62,
+            child: GestureDetector(
+              onTap: () {
+                final refCode = ApiService.activeReferralCode ?? 'SAPAR';
+                final shareUrl = 'https://sapar.kz/tours/${tour.id}?ref=$refCode';
+                Clipboard.setData(ClipboardData(text: shareUrl));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text('Ссылка на тур скопирована: $shareUrl')),
+                      ],
+                    ),
+                    backgroundColor: AppColors.teal,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.ink.withValues(alpha: 0.42),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.share_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ),
           ),
 

@@ -26,6 +26,9 @@ class Booking(Base):
     total_price = Column(Integer, nullable=False)
 
     status = Column(String(30), default="paid", nullable=False)  # "pending", "confirmed", "paid", "cancelled"
+    referral_code = Column(String(50), nullable=True, index=True)
+    referral_reward = Column(Integer, default=0, nullable=False)
+    referral_partner_id = Column(String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -33,3 +36,4 @@ class Booking(Base):
     agency_rel = relationship("Agency", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
     payments = relationship("Payment", back_populates="booking", cascade="all, delete-orphan")
+    referral_partner = relationship("ReferralPartner", back_populates="bookings")

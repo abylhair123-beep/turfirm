@@ -10,6 +10,7 @@ class BookingCreate(BaseModel):
     customer_email: str = Field(alias="customerEmail")
     guests_count: int = Field(default=1, alias="guestsCount")
     payment_method: str = Field(default="Kaspi Pay", alias="paymentMethod")
+    referral_code: Optional[str] = Field(default=None, alias="referralCode")
 
     model_config = {
         "populate_by_name": True,
@@ -33,6 +34,8 @@ class BookingResponse(BaseModel):
     service_fee: int = Field(alias="serviceFee")
     total_price: int = Field(alias="totalPrice")
     status: str
+    referral_code: Optional[str] = Field(default=None, alias="referralCode")
+    referral_reward: Optional[int] = Field(default=0, alias="referralReward")
     created_at: datetime = Field(alias="createdAt")
 
     model_config = {

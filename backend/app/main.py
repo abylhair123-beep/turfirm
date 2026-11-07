@@ -28,6 +28,7 @@ from app.database import Base, SessionLocal, engine
 from app.favorites.router import router as favorites_router
 from app.notifications.router import router as notifications_router
 from app.payments.router import router as payments_router
+from app.referrals.router import router as referrals_router
 from app.reviews.router import router as reviews_router
 from app.seed import seed_data
 from app.storage.router import router as storage_router
@@ -99,6 +100,7 @@ app.include_router(notifications_router, prefix=settings.api_v1_prefix)
 app.include_router(storage_router, prefix=settings.api_v1_prefix)
 app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
+app.include_router(referrals_router, prefix=settings.api_v1_prefix)
 
 # Раздача локально загруженных медиа-файлов по /uploads/...
 os.makedirs(settings.upload_dir, exist_ok=True)

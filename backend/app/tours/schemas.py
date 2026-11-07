@@ -8,8 +8,12 @@ class TourBase(BaseModel):
     destination: str
     category: str = "Пляжный отдых"
     nights: str
+    duration_nights: Optional[int] = Field(default=7, alias="durationNights")
     dates: str
     meal: str
+    meal_type: Optional[str] = Field(default="AI", alias="mealType")
+    hotel_stars: Optional[int] = Field(default=4, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=1, alias="beachLine")
     departure_city: str = Field(default="Алматы", alias="departureCity")
     meta: Optional[str] = None
     price_from: int = Field(alias="priceFrom")
@@ -37,8 +41,12 @@ class TourUpdate(BaseModel):
     destination: Optional[str] = None
     category: Optional[str] = None
     nights: Optional[str] = None
+    duration_nights: Optional[int] = Field(default=None, alias="durationNights")
     dates: Optional[str] = None
     meal: Optional[str] = None
+    meal_type: Optional[str] = Field(default=None, alias="mealType")
+    hotel_stars: Optional[int] = Field(default=None, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=None, alias="beachLine")
     departure_city: Optional[str] = Field(default=None, alias="departureCity")
     meta: Optional[str] = None
     price_from: Optional[int] = Field(default=None, alias="priceFrom")
@@ -64,8 +72,12 @@ class TourResponse(BaseModel):
     title: str
     category: str
     nights: str
+    duration_nights: Optional[int] = Field(default=7, alias="durationNights")
     dates: str
     meal: str
+    meal_type: Optional[str] = Field(default="AI", alias="mealType")
+    hotel_stars: Optional[int] = Field(default=4, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=1, alias="beachLine")
     departure_city: str = Field(alias="departureCity")
     meta: str
     rating: float

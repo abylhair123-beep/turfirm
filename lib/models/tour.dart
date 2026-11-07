@@ -11,8 +11,12 @@ class Tour {
     required this.title,
     this.category = 'Пляжный отдых',
     required this.nights,
+    this.durationNights = 7,
     required this.dates,
     required this.meal,
+    this.mealType = 'AI',
+    this.hotelStars = 4,
+    this.beachLine = 1,
     required this.departureCity,
     required this.meta,
     required this.rating,
@@ -33,8 +37,12 @@ class Tour {
   final String title;
   final String category;
   final String nights;
+  final int durationNights;
   final String dates;
   final String meal;
+  final String mealType;
+  final int hotelStars;
+  final int beachLine;
   final String departureCity;
   final String meta;
   final double rating;
@@ -109,8 +117,12 @@ class Tour {
       title: json['title'] as String? ?? '',
       category: json['category'] as String? ?? 'Пляжный отдых',
       nights: json['nights'] as String? ?? '',
+      durationNights: (json['durationNights'] as num? ?? json['duration_nights'] as num?)?.toInt() ?? 7,
       dates: json['dates'] as String? ?? '',
       meal: json['meal'] as String? ?? '',
+      mealType: json['mealType'] as String? ?? json['meal_type'] as String? ?? 'AI',
+      hotelStars: (json['hotelStars'] as num? ?? json['hotel_stars'] as num?)?.toInt() ?? 4,
+      beachLine: (json['beachLine'] as num? ?? json['beach_line'] as num?)?.toInt() ?? 1,
       departureCity: json['departureCity'] as String? ?? json['departure_city'] as String? ?? 'Алматы',
       meta: json['meta'] as String? ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 5.0,
@@ -134,8 +146,12 @@ class Tour {
       'title': title,
       'category': category,
       'nights': nights,
+      'durationNights': durationNights,
       'dates': dates,
       'meal': meal,
+      'mealType': mealType,
+      'hotelStars': hotelStars,
+      'beachLine': beachLine,
       'departureCity': departureCity,
       'meta': meta,
       'rating': rating,
@@ -159,8 +175,12 @@ final mockTours = <Tour>[
     title: 'Тур в Анталию',
     category: 'Пляжный отдых',
     nights: '7 ночей',
+    durationNights: 7,
     dates: '12–19 окт',
     meal: 'Всё вкл.',
+    mealType: 'AI',
+    hotelStars: 4,
+    beachLine: 1,
     departureCity: 'Алматы',
     meta: '7 ночей · вылет 12 окт · всё включено',
     rating: 4.8,
@@ -193,8 +213,12 @@ final mockTours = <Tour>[
     title: 'Дубай Delight',
     category: 'Пляжный отдых',
     nights: '5 ночей',
+    durationNights: 5,
     dates: '18–23 окт',
     meal: 'Завтраки',
+    mealType: 'BB',
+    hotelStars: 5,
+    beachLine: 2,
     departureCity: 'Алматы',
     meta: '5 ночей · вылет 18 окт · завтраки',
     rating: 4.9,
@@ -225,8 +249,12 @@ final mockTours = <Tour>[
     title: 'Горный уикенд Шымбулак',
     category: 'Горы',
     nights: '3 ночи',
+    durationNights: 3,
     dates: '20–23 нояб',
     meal: 'Завтраки',
+    mealType: 'BB',
+    hotelStars: 4,
+    beachLine: 0,
     departureCity: 'Алматы',
     meta: '3 ночи · отель на высоте 2200м',
     rating: 4.95,

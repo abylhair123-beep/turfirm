@@ -78,6 +78,8 @@ def register(request: Request, user_in: UserRegister, db: Session = Depends(get_
     )
 
 
+
+
 @router.post("/login", response_model=Token)
 @limiter.limit(settings.rate_limit_auth)
 def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
@@ -104,6 +106,8 @@ def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)
     )
 
 
+
+
 @router.post("/oauth-token", response_model=Token)
 @limiter.limit(settings.rate_limit_auth)
 def login_oauth(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -124,9 +128,20 @@ def login_oauth(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     )
 
 
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Удаление аккаунта пользователя (требование Apple App Store Guideline 5.1.1(v))."""
+    db.delete(current_user)
+    db.commit()
+    return None
+
 
 
 @router.post("/sms/send-otp", response_model=SmsSendOtpResponse)
@@ -197,4 +212,6 @@ def verify_sms_otp(request: Request, verify_in: SmsVerifyOtpRequest, db: Session
         role=user.role,
         full_name=user.full_name,
     )
+
+
 

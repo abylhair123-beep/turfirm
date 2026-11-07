@@ -85,6 +85,38 @@ def test_filter_tours_by_category():
         assert t["category"] == "Горы"
 
 
+def test_filter_tours_by_stars_and_meal_and_beach():
+    # 5 stars only
+    res5 = client.get("/api/v1/tours?hotelStars=5")
+    assert res5.status_code == 200
+    tours5 = res5.json()
+    assert len(tours5) >= 1
+    for t in tours5:
+        assert t["hotelStars"] >= 5
+
+    # Beach line 1
+    res_beach = client.get("/api/v1/tours?beachLine=1")
+    assert res_beach.status_code == 200
+    beach_tours = res_beach.json()
+    assert len(beach_tours) >= 1
+    for t in beach_tours:
+        assert t["beachLine"] <= 1
+
+    # Meal type AI
+    res_meal = client.get("/api/v1/tours?mealType=AI")
+    assert res_meal.status_code == 200
+    ai_tours = res_meal.json()
+    assert any("AI" in t["mealType"] or "вкл" in t["meal"].lower() for t in ai_tours)
+
+    # Duration filter
+    res_dur = client.get("/api/v1/tours?minDuration=6&maxDuration=8")
+    assert res_dur.status_code == 200
+    dur_tours = res_dur.json()
+    assert len(dur_tours) >= 1
+    for t in dur_tours:
+        assert 6 <= t["durationNights"] <= 8
+
+
 def test_get_tour_by_id():
     res = client.get("/api/v1/tours/antalya-7n")
     assert res.status_code == 200

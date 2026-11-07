@@ -44,9 +44,8 @@ class PaymentResponseData {
 }
 
 class ApiService {
-  // Порт Sapar-бэкенда. Сейчас 8001, т.к. порт 8000 занят другим проектом.
-  // Когда освободишь 8000 — верни сюда 8000 (одно место).
-  static const int _apiPort = 8001;
+  // Порт Sapar-бэкенда.
+  static const int _apiPort = 8000;
 
   static String get defaultBaseUrl {
     if (kIsWeb) {
@@ -232,6 +231,24 @@ class ApiService {
     await prefs.remove('auth_user');
   }
 
+  /// Полное удаление аккаунта (Apple App Store Guideline 5.1.1(v) Account Deletion)
+  static Future<bool> deleteAccount() async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/me');
+      final response = await http
+          .delete(uri, headers: _headers())
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        await logout();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] Delete account error: $e');
+    }
+    await logout();
+    return true;
+  }
+
   /// Запрос 4-значного OTP-кода по SMS
   static Future<Map<String, dynamic>> sendSmsOtp(String phone) async {
     try {
@@ -310,13 +327,20 @@ class ApiService {
 
   // ==================== ТУРЫ ====================
 
-  /// Получение каталога туров с поддержкой фильтрации
+  /// Получение каталога туров с поддержкой расширенной фильтрации
   static Future<List<Tour>> getTours({
     String? category,
     String? search,
     String? departureCity,
     int? minPrice,
     int? maxPrice,
+    int? hotelStars,
+    String? mealType,
+    int? beachLine,
+    int? durationNights,
+    int? minDuration,
+    int? maxDuration,
+    double? minRating,
   }) async {
     try {
       final queryParams = <String, String>{};
@@ -334,6 +358,27 @@ class ApiService {
       }
       if (maxPrice != null && maxPrice > 0) {
         queryParams['maxPrice'] = maxPrice.toString();
+      }
+      if (hotelStars != null && hotelStars > 0) {
+        queryParams['hotelStars'] = hotelStars.toString();
+      }
+      if (mealType != null && mealType.isNotEmpty && mealType != 'Все') {
+        queryParams['mealType'] = mealType;
+      }
+      if (beachLine != null && beachLine > 0) {
+        queryParams['beachLine'] = beachLine.toString();
+      }
+      if (durationNights != null && durationNights > 0) {
+        queryParams['durationNights'] = durationNights.toString();
+      }
+      if (minDuration != null && minDuration > 0) {
+        queryParams['minDuration'] = minDuration.toString();
+      }
+      if (maxDuration != null && maxDuration > 0) {
+        queryParams['maxDuration'] = maxDuration.toString();
+      }
+      if (minRating != null && minRating > 0) {
+        queryParams['minRating'] = minRating.toString();
       }
 
       final uri = Uri.parse('$baseUrl/tours').replace(
@@ -374,6 +419,27 @@ class ApiService {
     }
     if (maxPrice != null && maxPrice > 0) {
       filtered = filtered.where((t) => t.priceFrom <= maxPrice).toList();
+    }
+    if (hotelStars != null && hotelStars > 0) {
+      filtered = filtered.where((t) => t.hotelStars >= hotelStars).toList();
+    }
+    if (mealType != null && mealType.isNotEmpty && mealType != 'Все') {
+      filtered = filtered.where((t) => t.mealType == mealType || t.meal.contains(mealType)).toList();
+    }
+    if (beachLine != null && beachLine > 0) {
+      filtered = filtered.where((t) => t.beachLine <= beachLine).toList();
+    }
+    if (durationNights != null && durationNights > 0) {
+      filtered = filtered.where((t) => t.durationNights == durationNights).toList();
+    }
+    if (minDuration != null && minDuration > 0) {
+      filtered = filtered.where((t) => t.durationNights >= minDuration).toList();
+    }
+    if (maxDuration != null && maxDuration > 0) {
+      filtered = filtered.where((t) => t.durationNights <= maxDuration).toList();
+    }
+    if (minRating != null && minRating > 0) {
+      filtered = filtered.where((t) => t.rating >= minRating).toList();
     }
     return filtered;
   }

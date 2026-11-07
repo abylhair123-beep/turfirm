@@ -81,6 +81,36 @@ void _showLanguageSelector(BuildContext context) {
   );
 }
 
+void _confirmDeleteAccount(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Удаление аккаунта'),
+      content: const Text(
+        'Вы уверены, что хотите удалить аккаунт SAPAR? Все ваши бронирования, избранное и персональные данные будут удалены безвозвратно.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Отмена'),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.of(ctx).pop();
+            final ok = await ApiService.deleteAccount();
+            if (context.mounted && ok) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ваш аккаунт был успешно удален.')),
+              );
+            }
+          },
+          child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
 class _UnauthenticatedView extends StatelessWidget {
   const _UnauthenticatedView();
 
@@ -366,6 +396,20 @@ class _AuthenticatedView extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
+        const SizedBox(height: 12),
+        // Удаление аккаунта (Apple App Store Guideline 5.1.1(v))
+        TextButton(
+          onPressed: () => _confirmDeleteAccount(context),
+          child: const Text(
+            'Удалить аккаунт',
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 13,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
       ],
     );
   }

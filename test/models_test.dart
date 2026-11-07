@@ -82,6 +82,35 @@ void main() {
       expect(parsed.toJson()['photoUrls'], contains('https://images.unsplash.com/photo-2'));
     });
 
+    test('Tour attributes for filtering (hotelStars, mealType, beachLine, durationNights)', () {
+      final jsonWithAttrs = {
+        'id': 'test-filter-1',
+        'agency': 'Turan Travel',
+        'destination': 'Анталия, Турция',
+        'title': 'Тур в отель 5 звёзд',
+        'nights': '7 ночей',
+        'durationNights': 7,
+        'hotelStars': 5,
+        'mealType': 'AI',
+        'beachLine': 1,
+        'priceFrom': 320000,
+        'description': 'Отель 5★ всё включено на первой линии',
+        'included': ['Перелёт', 'Отель 5★'],
+      };
+
+      final tour = Tour.fromJson(jsonWithAttrs);
+      expect(tour.hotelStars, 5);
+      expect(tour.mealType, 'AI');
+      expect(tour.beachLine, 1);
+      expect(tour.durationNights, 7);
+
+      final map = tour.toJson();
+      expect(map['hotelStars'], 5);
+      expect(map['mealType'], 'AI');
+      expect(map['beachLine'], 1);
+      expect(map['durationNights'], 7);
+    });
+
     test('BookingRequest serialization', () {
       const request = BookingRequest(
         tourId: 'antalya-7n',

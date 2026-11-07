@@ -116,6 +116,18 @@ class TourCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(tour.meta, style: AppText.caption),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _attrTag('${tour.hotelStars}★', const Color(0xFFFFF8E1), const Color(0xFFF57F17)),
+                        _attrTag(tour.mealType.isNotEmpty ? tour.mealType : tour.meal, const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
+                        if (tour.beachLine > 0)
+                          _attrTag('${tour.beachLine}-я линия', const Color(0xFFE1F5FE), const Color(0xFF0288D1)),
+                        _attrTag('${tour.durationNights} ночей', const Color(0xFFF3E5F5), const Color(0xFF7B1FA2)),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -141,6 +153,20 @@ class TourCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Text(text, style: AppText.work(size: 11.5, weight: FontWeight.w600, color: fg)),
+    );
+  }
+
+  Widget _attrTag(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: fg),
+      ),
     );
   }
 }

@@ -27,8 +27,12 @@ def _tour_to_response(tour: Tour) -> TourResponse:
         title=tour.title,
         category=tour.category,
         nights=tour.nights,
+        durationNights=tour.duration_nights or 7,
         dates=tour.dates,
         meal=tour.meal,
+        mealType=tour.meal_type or "AI",
+        hotelStars=tour.hotel_stars or 4,
+        beachLine=tour.beach_line or 1,
         departureCity=tour.departure_city,
         meta=tour.meta,
         rating=tour.rating,
@@ -71,8 +75,15 @@ def get_tours(
     category: Optional[str] = Query(None, description="Фильтр по категории (Пляжный отдых, Горы и т.д.)"),
     search: Optional[str] = Query(None, description="Поиск по названию, городу или агентству"),
     departure_city: Optional[str] = Query(None, alias="departureCity", description="Город вылета"),
-    min_price: Optional[int] = Query(None, alias="minPrice"),
-    max_price: Optional[int] = Query(None, alias="maxPrice"),
+    min_price: Optional[int] = Query(None, alias="minPrice", description="Минимальная цена (₸)"),
+    max_price: Optional[int] = Query(None, alias="maxPrice", description="Максимальная цена (₸)"),
+    hotel_stars: Optional[int] = Query(None, alias="hotelStars", description="Минимум звёзд отеля (1-5)"),
+    meal_type: Optional[str] = Query(None, alias="mealType", description="Тип питания (AI, UAI, BB, HB, FB, RO)"),
+    beach_line: Optional[int] = Query(None, alias="beachLine", description="Линия пляжа (1, 2, 3)"),
+    duration_nights: Optional[int] = Query(None, alias="durationNights", description="Точная длительность ночей"),
+    min_duration: Optional[int] = Query(None, alias="minDuration", description="Минимум ночей"),
+    max_duration: Optional[int] = Query(None, alias="maxDuration", description="Максимум ночей"),
+    min_rating: Optional[float] = Query(None, alias="minRating", description="Минимальный рейтинг тура (напр. 4.5)"),
     agency_id: Optional[str] = Query(None, alias="agencyId"),
     skip: int = 0,
     limit: int = 50,
@@ -85,6 +96,13 @@ def get_tours(
         dep=departure_city,
         min_p=min_price,
         max_p=max_price,
+        stars=hotel_stars,
+        meal=meal_type,
+        beach=beach_line,
+        dur=duration_nights,
+        min_dur=min_duration,
+        max_dur=max_duration,
+        rating=min_rating,
         ag=agency_id,
         skip=skip,
         lim=limit,
@@ -98,7 +116,7 @@ def get_tours(
     if category and category != "Все":
         query = query.filter(Tour.category == category)
 
-    if departure_city:
+    if departure_city and departure_city != "Любой":
         query = query.filter(Tour.departure_city.ilike(f"%{departure_city}%"))
 
     if min_price is not None:
@@ -106,6 +124,33 @@ def get_tours(
 
     if max_price is not None:
         query = query.filter(Tour.price_from <= max_price)
+
+    if hotel_stars is not None and hotel_stars > 0:
+        query = query.filter(Tour.hotel_stars >= hotel_stars)
+
+    if meal_type and meal_type != "Все":
+        query = query.filter(
+            or_(
+                Tour.meal_type.ilike(f"%{meal_type}%"),
+                Tour.meal.ilike(f"%{meal_type}%"),
+            )
+        )
+
+    if beach_line is not None and beach_line > 0:
+        # Ищем отели на этой линии пляжа или ближе (например, запрос 2-я линия покажет 1 и 2)
+        query = query.filter(Tour.beach_line <= beach_line)
+
+    if duration_nights is not None:
+        query = query.filter(Tour.duration_nights == duration_nights)
+
+    if min_duration is not None:
+        query = query.filter(Tour.duration_nights >= min_duration)
+
+    if max_duration is not None:
+        query = query.filter(Tour.duration_nights <= max_duration)
+
+    if min_rating is not None:
+        query = query.filter(Tour.rating >= min_rating)
 
     if agency_id:
         query = query.filter(Tour.agency_id == agency_id)
@@ -166,8 +211,12 @@ def create_tour(
         title=tour_in.title,
         category=tour_in.category,
         nights=tour_in.nights,
+        duration_nights=tour_in.duration_nights or 7,
         dates=tour_in.dates,
         meal=tour_in.meal,
+        meal_type=tour_in.meal_type or "AI",
+        hotel_stars=tour_in.hotel_stars or 4,
+        beach_line=tour_in.beach_line or 1,
         departure_city=tour_in.departure_city,
         meta=meta,
         rating=tour_in.rating or 5.0,
@@ -203,6 +252,14 @@ def update_tour(
     for field, val in tour_update.model_dump(exclude_unset=True).items():
         if field == "isActive":
             tour.is_active = val
+        elif field == "durationNights":
+            tour.duration_nights = val
+        elif field == "mealType":
+            tour.meal_type = val
+        elif field == "hotelStars":
+            tour.hotel_stars = val
+        elif field == "beachLine":
+            tour.beach_line = val
         elif hasattr(tour, field) and val is not None:
             setattr(tour, field, val)
 

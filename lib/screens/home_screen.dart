@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/tour.dart';
 import '../services/api_service.dart';
@@ -69,6 +71,12 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
   List<Tour> _tours = mockTours;
   bool _isLoading = false;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+
+  // Умный поиск (подсказки как в Kaspi)
+  Timer? _searchDebounce;
+  List<SearchSuggestion> _suggestions = [];
+  bool _suggestLoading = false;
 
   static const _categories = [
     'Пляжный отдых',
@@ -81,13 +89,45 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
   @override
   void initState() {
     super.initState();
+    _searchFocus.addListener(() => setState(() {}));
     _loadTours();
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _onHomeSearchChanged(String value) {
+    _loadTours(); // живой фильтр каталога
+    _searchDebounce?.cancel();
+    final q = value.trim();
+    if (q.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    setState(() => _suggestLoading = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () async {
+      final items = await ApiService.getSuggestions(q);
+      if (mounted) {
+        setState(() {
+          _suggestions = items;
+          _suggestLoading = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _selectHomeSuggestion(String text) async {
+    _searchController.text = text;
+    _searchController.selection = TextSelection.collapsed(offset: text.length);
+    _searchFocus.unfocus();
+    await ApiService.addRecentSearch(text);
+    setState(() => _suggestions = []);
+    _loadTours();
   }
 
   Future<void> _loadTours() async {
@@ -116,6 +156,68 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
     _loadTours();
   }
 
+  Widget _buildHomeSuggestions() {
+    if (!_suggestLoading && _suggestions.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: _suggestLoading && _suggestions.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+                ),
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final s in _suggestions)
+                  InkWell(
+                    onTap: () => _selectHomeSuggestion(s.text),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      child: Row(
+                        children: [
+                          Icon(_homeSuggestIcon(s.type), size: 19, color: AppColors.muted),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              s.text,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.work(size: 14, color: AppColors.ink),
+                            ),
+                          ),
+                          const Icon(Icons.north_west_rounded, size: 15, color: AppColors.mutedLight),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  static IconData _homeSuggestIcon(String type) {
+    switch (type) {
+      case 'tour':
+        return Icons.card_travel_rounded;
+      case 'agency':
+        return Icons.apartment_rounded;
+      case 'category':
+        return Icons.category_rounded;
+      default:
+        return Icons.place_outlined;
+    }
+  }
+
   Future<void> _openCreateTour() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const CreateTourScreen()),
@@ -134,12 +236,19 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreateTour,
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: Text('Тур', style: AppText.sora(size: 14, color: Colors.white)),
+      // Кнопка «+Тур» доступна только турагентствам (роль agency).
+      floatingActionButton: ValueListenableBuilder(
+        valueListenable: ApiService.userNotifier,
+        builder: (context, user, _) {
+          if (user?.isAgency != true) return const SizedBox.shrink();
+          return FloatingActionButton.extended(
+            onPressed: _openCreateTour,
+            backgroundColor: AppColors.teal,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: Text('Тур', style: AppText.sora(size: 14, color: Colors.white)),
+          );
+        },
       ),
       body: RefreshIndicator(
         onRefresh: _loadTours,
@@ -152,11 +261,16 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
             const SizedBox(height: 16),
             _SearchBar(
               controller: _searchController,
-              onChanged: (val) {
+              focusNode: _searchFocus,
+              onChanged: _onHomeSearchChanged,
+              onSubmitted: (val) {
+                if (val.trim().isNotEmpty) ApiService.addRecentSearch(val.trim());
+                _searchFocus.unfocus();
                 _loadTours();
               },
-              onSubmitted: (_) => _loadTours(),
             ),
+            if (_searchFocus.hasFocus && _searchController.text.trim().isNotEmpty)
+              _buildHomeSuggestions(),
             const SizedBox(height: 16),
             SizedBox(
               height: 40,
@@ -312,11 +426,13 @@ class _TopBar extends StatelessWidget {
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
+    required this.focusNode,
     required this.onChanged,
     required this.onSubmitted,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmitted;
 
@@ -336,6 +452,8 @@ class _SearchBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
+              textInputAction: TextInputAction.search,
               onChanged: onChanged,
               onSubmitted: onSubmitted,
               decoration: InputDecoration(

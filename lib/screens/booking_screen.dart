@@ -29,12 +29,19 @@ class _BookingScreenState extends State<BookingScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
+  final TextEditingController _promoController = TextEditingController();
+
+  PromoResult? _promo;
+  bool _promoChecking = false;
 
   static const _paymentMethods = ['Kaspi Pay', 'Карта', 'Halyk Bank'];
   static const _serviceFee = 9800;
 
   int get _tourTotal => widget.tour.priceFrom * _guests;
   int get _total => _tourTotal + _serviceFee;
+  // Скидку считаем по проценту — чтобы она оставалась верной при смене числа гостей.
+  int get _discount => (_promo?.valid == true) ? (_total * _promo!.discountPercent / 100).round() : 0;
+  int get _payable => _total - _discount;
 
   @override
   void initState() {
@@ -50,7 +57,32 @@ class _BookingScreenState extends State<BookingScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _promoController.dispose();
     super.dispose();
+  }
+
+  Future<void> _applyPromo() async {
+    final code = _promoController.text.trim();
+    if (code.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _promoChecking = true);
+    final res = await ApiService.validatePromo(code, _total);
+    if (mounted) {
+      setState(() {
+        _promo = res;
+        _promoChecking = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res.message)),
+      );
+    }
+  }
+
+  void _removePromo() {
+    setState(() {
+      _promo = null;
+      _promoController.clear();
+    });
   }
 
   String _fmt(int v) {
@@ -293,6 +325,10 @@ class _BookingScreenState extends State<BookingScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
+                  Text('Промокод', style: AppText.h4),
+                  const SizedBox(height: 8),
+                  _buildPromoField(),
+                  const SizedBox(height: 18),
                   Text('Детализация стоимости', style: AppText.h4),
                   const SizedBox(height: 8),
                   Container(
@@ -307,17 +343,52 @@ class _BookingScreenState extends State<BookingScreen> {
                         _priceRow('Тур (${_fmt(tour.priceFrom)} × $_guests)', _fmt(_tourTotal)),
                         const SizedBox(height: 8),
                         _priceRow('Сервисный сбор платформы', _fmt(_serviceFee)),
+                        if (_discount > 0) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Промокод ${_promo!.code} (−${_promo!.discountPercent}%)',
+                                  style: AppText.work(size: 13, color: const Color(0xFF2E7D32))),
+                              Text('−${_fmt(_discount)}',
+                                  style: AppText.work(size: 13.5, weight: FontWeight.w600, color: const Color(0xFF2E7D32))),
+                            ],
+                          ),
+                        ],
                         const Divider(height: 20, color: AppColors.border),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('Итого к оплате', style: AppText.h4),
                             Text(
-                              _fmt(_total),
+                              _fmt(_payable),
                               style: AppText.sora(size: 18, weight: FontWeight.w700, color: AppColors.teal),
                             ),
                           ],
                         ),
+                        if (tour.installmentMonths > 0 && tour.monthlyFormatted != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFC107),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_month_rounded, size: 18, color: Color(0xFF5A4300)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Рассрочка 0-0-${tour.installmentMonths}: ${tour.monthlyFormatted} × ${tour.installmentMonths} мес',
+                                    style: AppText.work(size: 12.5, weight: FontWeight.w700, color: const Color(0xFF5A4300)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -335,14 +406,74 @@ class _BookingScreenState extends State<BookingScreen> {
                 title: _isSubmitting
                     ? 'Оформление...'
                     : _paymentMethods[_paymentIndex] == 'Kaspi Pay'
-                        ? 'Оплатить через Kaspi Pay (${_fmt(_total)})'
-                        : 'Оплатить ${_fmt(_total)}',
+                        ? 'Оплатить через Kaspi Pay (${_fmt(_payable)})'
+                        : 'Оплатить ${_fmt(_payable)}',
                 isLoading: _isSubmitting,
                 onTap: _handlePayment,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPromoField() {
+    final applied = _promo?.valid == true;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: applied ? const Color(0xFF2E7D32) : AppColors.border,
+          width: applied ? 1.6 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            applied ? Icons.check_circle_rounded : Icons.local_offer_outlined,
+            size: 18,
+            color: applied ? const Color(0xFF2E7D32) : AppColors.muted,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _promoController,
+              enabled: !applied,
+              textCapitalization: TextCapitalization.characters,
+              onSubmitted: (_) => _applyPromo(),
+              decoration: InputDecoration(
+                hintText: 'Введите промокод (напр. SAPAR10)',
+                hintStyle: AppText.work(size: 13.5, color: AppColors.mutedLight),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              style: AppText.work(size: 14, color: AppColors.ink),
+            ),
+          ),
+          if (applied)
+            GestureDetector(
+              onTap: _removePromo,
+              child: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+            )
+          else
+            GestureDetector(
+              onTap: _promoChecking ? null : _applyPromo,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                child: _promoChecking
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+                      )
+                    : Text('Применить',
+                        style: AppText.work(size: 13.5, weight: FontWeight.w700, color: AppColors.teal)),
+              ),
+            ),
+        ],
       ),
     );
   }

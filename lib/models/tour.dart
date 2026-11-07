@@ -24,6 +24,21 @@ class Tour {
     required this.description,
     required this.included,
     this.isActive = true,
+    this.oldPrice,
+    this.discountPercent = 0,
+    this.isHot = false,
+    this.hotUntil,
+    this.seatsLeft,
+    this.installmentMonths = 0,
+    this.monthlyPayment,
+    this.maxGuests = 4,
+    this.childrenAllowed = true,
+    this.amenityTags = const [],
+    this.hotelName,
+    this.hotelStars,
+    this.hotelDescription,
+    this.hotelPhotos = const [],
+    this.hotelAmenities = const {},
   }) : _photoUrls = photoUrls;
 
   final String id;
@@ -46,6 +61,34 @@ class Tour {
   final String description;
   final List<String> included;
   final bool isActive;
+
+  // --- Маркетинг ---
+  final int? oldPrice;          // Цена до скидки
+  final int discountPercent;    // Процент скидки
+  final bool isHot;             // «Горящий тур»
+  final DateTime? hotUntil;     // Дедлайн горящего предложения (для таймера)
+  final int? seatsLeft;         // Осталось мест
+  final int installmentMonths;  // Рассрочка на N месяцев (0 = нет)
+  final int? monthlyPayment;    // Платёж в месяц при рассрочке
+
+  // --- Вместимость и фильтры ---
+  final int maxGuests;          // Максимум гостей на бронь
+  final bool childrenAllowed;   // Можно ли с детьми
+  final List<String> amenityTags; // Теги удобств: all_inclusive, beach_first_line, ...
+
+  // --- Карточка отеля (заполняет турагентство) ---
+  final String? hotelName;
+  final int? hotelStars;
+  final String? hotelDescription;
+  final List<String> hotelPhotos;
+  final Map<String, List<String>> hotelAmenities; // {"Для детей": [...], ...}
+
+  bool get hasHotelInfo => (hotelName != null && hotelName!.isNotEmpty) ||
+      hotelDescription != null || hotelAmenities.isNotEmpty;
+
+  bool get hasDiscount => oldPrice != null && oldPrice! > priceFrom;
+  String? get oldPriceFormatted => oldPrice != null ? '${_formatThousands(oldPrice!)} ₸' : null;
+  String? get monthlyFormatted => monthlyPayment != null ? '${_formatThousands(monthlyPayment!)} ₸' : null;
 
   /// Список всех фото тура (если передан photoUrls — используем его,
   /// иначе оборачиваем одиночный photoUrl, либо пустой список).
@@ -122,7 +165,42 @@ class Tour {
       description: json['description'] as String? ?? '',
       included: (json['included'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       isActive: json['isActive'] as bool? ?? json['is_active'] as bool? ?? true,
+      oldPrice: (json['oldPrice'] as num? ?? json['old_price'] as num?)?.toInt(),
+      discountPercent: (json['discountPercent'] as num? ?? json['discount_percent'] as num?)?.toInt() ?? 0,
+      isHot: json['isHot'] as bool? ?? json['is_hot'] as bool? ?? false,
+      hotUntil: _parseDate(json['hotUntil'] ?? json['hot_until']),
+      seatsLeft: (json['seatsLeft'] as num? ?? json['seats_left'] as num?)?.toInt(),
+      installmentMonths: (json['installmentMonths'] as num? ?? json['installment_months'] as num?)?.toInt() ?? 0,
+      monthlyPayment: (json['monthlyPayment'] as num? ?? json['monthly_payment'] as num?)?.toInt(),
+      maxGuests: (json['maxGuests'] as num? ?? json['max_guests'] as num?)?.toInt() ?? 4,
+      childrenAllowed: json['childrenAllowed'] as bool? ?? json['children_allowed'] as bool? ?? true,
+      amenityTags: _parseStringList(json['amenityTags'] ?? json['amenity_tags']),
+      hotelName: json['hotelName'] as String? ?? json['hotel_name'] as String?,
+      hotelStars: (json['hotelStars'] as num? ?? json['hotel_stars'] as num?)?.toInt(),
+      hotelDescription: json['hotelDescription'] as String? ?? json['hotel_description'] as String?,
+      hotelPhotos: _parseStringList(json['hotelPhotos'] ?? json['hotel_photos']),
+      hotelAmenities: _parseAmenities(json['hotelAmenities'] ?? json['hotel_amenities']),
     );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static List<String> _parseStringList(dynamic value) {
+    if (value is List) return value.map((e) => e.toString()).toList();
+    return const [];
+  }
+
+  static Map<String, List<String>> _parseAmenities(dynamic value) {
+    if (value is Map) {
+      return value.map((key, val) => MapEntry(
+            key.toString(),
+            (val is List) ? val.map((e) => e.toString()).toList() : <String>[],
+          ));
+    }
+    return const {};
   }
 
   Map<String, dynamic> toJson() {

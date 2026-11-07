@@ -1,21 +1,206 @@
 import logging
+import re
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.agencies.models import Agency
 from app.auth.models import User
 from app.bookings.models import Booking
+from app.core.cache import cache
 from app.core.security import get_password_hash
 from app.database import Base, SessionLocal, engine
+from app.promo.models import PromoCode
 from app.reviews.models import Review
 from app.tours.models import Tour
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Маркетинговые колонки, добавленные после первого релиза. Для БД, созданных
+# раньше, доращиваем таблицу на старте (create_all новые колонки не добавляет).
+_MARKETING_COLUMNS = {
+    "old_price": "INTEGER",
+    "is_hot": "BOOLEAN DEFAULT FALSE NOT NULL",
+    "hot_until": "TIMESTAMP",
+    "seats_left": "INTEGER",
+    "installment_months": "INTEGER DEFAULT 12 NOT NULL",
+    "max_guests": "INTEGER DEFAULT 4 NOT NULL",
+    "children_allowed": "BOOLEAN DEFAULT TRUE NOT NULL",
+    "amenity_tags": "JSON DEFAULT '[]' NOT NULL",
+    "hotel_name": "VARCHAR(255)",
+    "hotel_stars": "INTEGER",
+    "hotel_description": "TEXT",
+    "hotel_photos": "JSON DEFAULT '[]' NOT NULL",
+    "hotel_amenities": "JSON DEFAULT '{}' NOT NULL",
+}
+
+
+def ensure_marketing_schema(db: Session) -> None:
+    """Idempotent: добавляет маркетинговые колонки в таблицу tours (PostgreSQL)."""
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return  # для sqlite таблица создаётся целиком через create_all
+    for col, ddl in _MARKETING_COLUMNS.items():
+        db.execute(text(f"ALTER TABLE tours ADD COLUMN IF NOT EXISTS {col} {ddl}"))
+    db.commit()
+
+
+def apply_demo_marketing(db: Session) -> None:
+    """Проставляет демо-скидки, «горящие» туры и рассрочку.
+    Idempotent: не трогает данные, если разметка уже есть."""
+    tours = db.query(Tour).all()
+    if not tours:
+        return
+    if any(t.old_price for t in tours) or any(t.is_hot for t in tours):
+        return  # уже размечено
+
+    now = datetime.now(timezone.utc)
+    demo = {
+        "dubai-5n": dict(old_price=459000, is_hot=True, hot_until=now + timedelta(days=2), seats_left=3),
+        "antalya-7n": dict(old_price=289000, seats_left=5),
+        "italy-visa-7n": dict(old_price=599000, is_hot=True, hot_until=now + timedelta(days=1, hours=6), seats_left=2),
+    }
+    for t in tours:
+        if not t.installment_months:
+            t.installment_months = 12
+        for key, val in demo.get(t.id, {}).items():
+            setattr(t, key, val)
+    db.commit()
+
+
+def apply_demo_catalog(db: Session) -> None:
+    """Проставляет демо-вместимость, теги удобств и карточки отелей.
+    Idempotent: пропускает, если теги уже заданы."""
+    tours = db.query(Tour).all()
+    if not tours or any(t.amenity_tags for t in tours):
+        return
+
+    rich = {
+        "dubai-5n": dict(
+            amenity_tags=["all_inclusive", "beach_first_line", "pool", "wifi", "spa", "kids_club"],
+            max_guests=5,
+            hotel_name="Dubai Marina Resort 5★", hotel_stars=5,
+            hotel_description="Роскошный отель на первой линии с собственным пляжем, тремя бассейнами и детским клубом. 10 минут до Dubai Mall.",
+            hotel_photos=[
+                "https://images.unsplash.com/photo-1512453979798-5ea266f8880c",
+                "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b",
+            ],
+            hotel_amenities={
+                "Для детей": ["Детский клуб 4–12 лет", "Бассейн-лягушатник", "Детское меню", "Няня по запросу"],
+                "Пляж и бассейн": ["Первая линия", "3 бассейна", "Аквапарк", "Лежаки бесплатно"],
+                "Питание": ["Всё включено 24/7", "A la carte рестораны", "Бары у бассейна"],
+                "Сервис": ["Wi-Fi на территории", "Трансфер", "СПА и хаммам", "Фитнес-зал"],
+            },
+        ),
+        "antalya-7n": dict(
+            amenity_tags=["all_inclusive", "beach_first_line", "pool", "wifi", "kids_club"],
+            max_guests=4,
+            hotel_name="Antalya Beach Hotel 4★", hotel_stars=4,
+            hotel_description="Семейный отель 4★ на первой линии с анимацией и аквапарком. 12 минут от аэропорта Антальи.",
+            hotel_photos=["https://images.unsplash.com/photo-1542314831-068cd1dbfeeb"],
+            hotel_amenities={
+                "Для детей": ["Мини-клуб", "Горки в аквапарке", "Детское меню"],
+                "Пляж и бассейн": ["Первая линия", "2 бассейна", "Аквапарк"],
+                "Питание": ["Всё включено", "Шведский стол"],
+                "Сервис": ["Wi-Fi", "Анимация", "Трансфер"],
+            },
+        ),
+        "italy-visa-7n": dict(
+            amenity_tags=["city_center", "breakfast", "wifi"],
+            max_guests=3, children_allowed=False,
+            hotel_name="Hotel Roma Centro 4★", hotel_stars=4,
+            hotel_description="Бутик-отель в центре Рима, 5 минут пешком до Колизея. Завтрак на террасе с видом на город.",
+            hotel_photos=["https://images.unsplash.com/photo-1552832230-c0197dd311b5"],
+            hotel_amenities={
+                "Расположение": ["Центр города", "5 мин до Колизея", "Рядом метро"],
+                "Питание": ["Завтрак включён", "Бар на крыше"],
+                "Сервис": ["Wi-Fi", "Экскурсии", "Трансфер по запросу"],
+            },
+        ),
+    }
+
+    for t in tours:
+        if not t.max_guests:
+            t.max_guests = 4
+        if t.id in rich:
+            for key, val in rich[t.id].items():
+                setattr(t, key, val)
+        else:
+            tags = ["wifi"]
+            if "включ" in (t.meal or "").lower():
+                tags.append("all_inclusive")
+            t.amenity_tags = tags
+    db.commit()
+
+
+def _guess_stars(tour: Tour) -> int:
+    text_blob = " ".join(tour.included or []) + " " + (tour.description or "")
+    m = re.search(r"(\d)\s*★", text_blob)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(\d)\s*(?:звезд|star)", text_blob, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return 4
+
+
+def apply_demo_hotels(db: Session) -> None:
+    """Для туров без карточки отеля генерируем её из имеющихся данных,
+    чтобы блок «Об отеле» показывался у всех туров. Idempotent: не трогает
+    туры, у которых hotel_name уже заполнено (например, вручную агентством)."""
+    tours = db.query(Tour).all()
+    changed = False
+    for t in tours:
+        if t.hotel_name:
+            continue  # карточка уже есть — не перезаписываем
+
+        base = t.destination.split(",")[0].split("&")[0].strip()
+        stars = _guess_stars(t)
+        t.hotel_name = f"{base} · Отель {stars}★"
+        t.hotel_stars = stars
+        t.hotel_description = t.description
+        if t.photo_url:
+            t.hotel_photos = [t.photo_url]
+        amenities: dict = {}
+        if t.included:
+            amenities["Включено в тур"] = list(t.included)
+        if t.meal:
+            amenities["Питание"] = [t.meal]
+        amenities["Расположение"] = [t.destination]
+        t.hotel_amenities = amenities
+        changed = True
+
+    if changed:
+        db.commit()
+
+
+def seed_promo_codes(db: Session) -> None:
+    """Idempotent: добавляет демо-промокоды, если их ещё нет."""
+    if db.query(PromoCode).first():
+        return
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        PromoCode(code="SAPAR10", discount_percent=10, description="−10% на первый заказ"),
+        PromoCode(code="HOT15", discount_percent=15, description="−15% на горящие туры",
+                  expires_at=now + timedelta(days=30)),
+        PromoCode(code="JUMA5", discount_percent=5, description="Kaspi Juma −5%"),
+    ])
+    db.commit()
+
 
 def seed_data(db: Session) -> None:
+    # 0. Доращиваем схему и демо-разметку для уже существующих БД
+    ensure_marketing_schema(db)
+    seed_promo_codes(db)
+
     # 1. Check if already seeded
     if db.query(Tour).first():
+        apply_demo_marketing(db)
+        apply_demo_catalog(db)
+        apply_demo_hotels(db)
+        cache.delete_pattern("sapar:cache:tours:*")  # сбросить устаревший кэш каталога
         logger.info("Database already seeded. Skipping.")
         return
 
@@ -326,6 +511,10 @@ def seed_data(db: Session) -> None:
     db.add(sample_booking)
 
     db.commit()
+    apply_demo_marketing(db)
+    apply_demo_catalog(db)
+    apply_demo_hotels(db)
+    cache.delete_pattern("sapar:cache:tours:*")
     logger.info("Successfully seeded Sapar database!")
 
 

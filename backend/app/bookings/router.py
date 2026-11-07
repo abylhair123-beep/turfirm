@@ -8,6 +8,7 @@ from app.auth.models import User
 from app.bookings.models import Booking
 from app.bookings.schemas import BookingCreate, BookingResponse, BookingStatusUpdate
 from app.bookings.voucher import build_travel_voucher_pdf
+from app.core.cache import cache
 from app.database import get_db
 from app.dependencies import get_current_user, get_current_user_optional
 from app.notifications.service import (
@@ -77,6 +78,13 @@ def create_booking(
     guests = max(1, booking_in.guests_count)
     total_price = (tour_price * guests) + service_fee
 
+    # Если по туру ведём учёт мест — проверяем, что их хватает
+    if tour.seats_left is not None and tour.seats_left < guests:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Недостаточно свободных мест: осталось {tour.seats_left}",
+        )
+
     booking = Booking(
         tour_id=tour.id,
         agency_id=tour.agency_id,
@@ -92,8 +100,16 @@ def create_booking(
         status="paid",  # Mark as paid since user selects payment method and pays
     )
     db.add(booking)
+
+    # Списываем забронированные места (если ведём учёт по туру)
+    if tour.seats_left is not None:
+        tour.seats_left = max(0, tour.seats_left - guests)
+
     db.commit()
     db.refresh(booking)
+
+    # Каталог кэшируется — сбрасываем кэш, чтобы новый остаток мест подтянулся
+    cache.delete_pattern("sapar:cache:tours:*")
 
     # Уведомления о новой брони (Telegram агентству + Email клиенту) — в фоне,
     # чтобы ответ не тормозил и сбой отправки не ломал бронирование.

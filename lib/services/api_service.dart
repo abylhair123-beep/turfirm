@@ -43,6 +43,75 @@ class PaymentResponseData {
   }
 }
 
+/// Доступный тег удобства для фильтра (из реального каталога).
+class AmenityOption {
+  const AmenityOption({required this.tag, required this.label, required this.count});
+  final String tag;
+  final String label;
+  final int count;
+}
+
+/// Доступные значения фильтров, собранные из каталога (`/tours/filters`).
+class FilterOptions {
+  const FilterOptions({required this.amenities, required this.stars});
+  final List<AmenityOption> amenities;
+  final List<int> stars;
+}
+
+/// Подсказка в поиске (результат `/search/suggest` или `/search/popular`).
+class SearchSuggestion {
+  const SearchSuggestion({
+    required this.type,
+    required this.text,
+    this.subtitle,
+    this.tourId,
+  });
+
+  final String type; // 'destination' | 'tour' | 'agency' | 'category' | 'recent'
+  final String text;
+  final String? subtitle;
+  final String? tourId;
+
+  factory SearchSuggestion.fromJson(Map<String, dynamic> json) {
+    return SearchSuggestion(
+      type: json['type'] as String? ?? 'destination',
+      text: json['text'] as String? ?? '',
+      subtitle: json['subtitle'] as String?,
+      tourId: json['tour_id'] as String?,
+    );
+  }
+}
+
+/// Результат проверки промокода (`/promo/validate`).
+class PromoResult {
+  const PromoResult({
+    required this.valid,
+    required this.code,
+    required this.discountPercent,
+    required this.discountAmount,
+    required this.finalAmount,
+    required this.message,
+  });
+
+  final bool valid;
+  final String code;
+  final int discountPercent;
+  final int discountAmount;
+  final int finalAmount;
+  final String message;
+
+  factory PromoResult.fromJson(Map<String, dynamic> json, int fallbackAmount) {
+    return PromoResult(
+      valid: json['valid'] as bool? ?? false,
+      code: json['code'] as String? ?? '',
+      discountPercent: (json['discountPercent'] as num? ?? json['discount_percent'] as num?)?.toInt() ?? 0,
+      discountAmount: (json['discountAmount'] as num? ?? json['discount_amount'] as num?)?.toInt() ?? 0,
+      finalAmount: (json['finalAmount'] as num? ?? json['final_amount'] as num?)?.toInt() ?? fallbackAmount,
+      message: json['message'] as String? ?? '',
+    );
+  }
+}
+
 class ApiService {
   // Порт Sapar-бэкенда. Сейчас 8001, т.к. порт 8000 занят другим проектом.
   // Когда освободишь 8000 — верни сюда 8000 (одно место).
@@ -317,6 +386,10 @@ class ApiService {
     String? departureCity,
     int? minPrice,
     int? maxPrice,
+    int? guests,
+    int? children,
+    List<String>? amenities,
+    List<int>? stars,
   }) async {
     try {
       final queryParams = <String, String>{};
@@ -334,6 +407,18 @@ class ApiService {
       }
       if (maxPrice != null && maxPrice > 0) {
         queryParams['maxPrice'] = maxPrice.toString();
+      }
+      if (guests != null && guests > 0) {
+        queryParams['guests'] = guests.toString();
+      }
+      if (children != null && children > 0) {
+        queryParams['children'] = children.toString();
+      }
+      if (amenities != null && amenities.isNotEmpty) {
+        queryParams['amenities'] = amenities.join(',');
+      }
+      if (stars != null && stars.isNotEmpty) {
+        queryParams['stars'] = stars.join(',');
       }
 
       final uri = Uri.parse('$baseUrl/tours').replace(
@@ -376,6 +461,139 @@ class ApiService {
       filtered = filtered.where((t) => t.priceFrom <= maxPrice).toList();
     }
     return filtered;
+  }
+
+  // ==================== ПОИСК И ПОДСКАЗКИ ====================
+
+  /// Живые подсказки по мере ввода (направления, туры, агентства, категории).
+  static Future<List<SearchSuggestion>> getSuggestions(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return [];
+    try {
+      final uri = Uri.parse('$baseUrl/search/suggest').replace(
+        queryParameters: {'q': q},
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return decoded
+            .map((e) => SearchSuggestion.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getSuggestions failed: $e');
+    }
+    return [];
+  }
+
+  /// Популярные направления — для пустой строки поиска.
+  static Future<List<SearchSuggestion>> getPopularSearches() async {
+    try {
+      final uri = Uri.parse('$baseUrl/search/popular');
+      final response = await http.get(uri).timeout(const Duration(seconds: 3));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return decoded
+            .map((e) => SearchSuggestion.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getPopularSearches failed: $e');
+    }
+    return [];
+  }
+
+  // Недавние запросы храним локально в SharedPreferences.
+  static const String _recentSearchesKey = 'recent_searches';
+  static const int _maxRecentSearches = 8;
+
+  static Future<List<String>> getRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(_recentSearchesKey) ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> addRecentSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_recentSearchesKey) ?? [];
+      list.removeWhere((e) => e.toLowerCase() == q.toLowerCase());
+      list.insert(0, q);
+      if (list.length > _maxRecentSearches) {
+        list.removeRange(_maxRecentSearches, list.length);
+      }
+      await prefs.setStringList(_recentSearchesKey, list);
+    } catch (_) {
+      // Недоступность хранилища не должна ломать поиск.
+    }
+  }
+
+  static Future<void> clearRecentSearches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recentSearchesKey);
+    } catch (_) {}
+  }
+
+  /// Доступные значения фильтров (удобства + звёзды) из реального каталога.
+  static Future<FilterOptions> getFilterOptions() async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/filters');
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final amenities = (data['amenities'] as List<dynamic>? ?? [])
+            .map((e) => AmenityOption(
+                  tag: (e as Map<String, dynamic>)['tag'] as String? ?? '',
+                  label: e['label'] as String? ?? '',
+                  count: (e['count'] as num?)?.toInt() ?? 0,
+                ))
+            .where((a) => a.tag.isNotEmpty)
+            .toList();
+        final stars = (data['stars'] as List<dynamic>? ?? [])
+            .map((e) => (e as num).toInt())
+            .toList();
+        return FilterOptions(amenities: amenities, stars: stars);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getFilterOptions failed: $e');
+    }
+    return const FilterOptions(amenities: [], stars: []);
+  }
+
+  // ==================== ПРОМОКОДЫ ====================
+
+  /// Проверка промокода и расчёт скидки для суммы заказа.
+  static Future<PromoResult> validatePromo(String code, int amount) async {
+    try {
+      final uri = Uri.parse('$baseUrl/promo/validate');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'code': code, 'amount': amount}),
+          )
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return PromoResult.fromJson(data, amount);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] validatePromo failed: $e');
+    }
+    return PromoResult(
+      valid: false,
+      code: code,
+      discountPercent: 0,
+      discountAmount: 0,
+      finalAmount: amount,
+      message: 'Не удалось проверить промокод',
+    );
   }
 
   // ==================== БРОНИРОВАНИЯ ====================

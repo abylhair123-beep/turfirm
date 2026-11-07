@@ -31,6 +31,25 @@ class Tour(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    # --- Маркетинг ---
+    old_price = Column(Integer, nullable=True)                 # Цена до скидки (для зачёркивания)
+    is_hot = Column(Boolean, default=False, nullable=False)    # «Горящий тур»
+    hot_until = Column(DateTime, nullable=True)                # Дедлайн горящего предложения (для таймера)
+    seats_left = Column(Integer, nullable=True)                # Осталось мест (null = не показываем)
+    installment_months = Column(Integer, default=12, nullable=False)  # Рассрочка на N месяцев (0 = нет)
+
+    # --- Вместимость и фильтры ---
+    max_guests = Column(Integer, default=4, nullable=False)    # Максимум гостей на бронь
+    children_allowed = Column(Boolean, default=True, nullable=False)  # Можно ли с детьми
+    amenity_tags = Column(JSON, default=list, nullable=False)  # Теги удобств: all_inclusive, beach_first_line, ...
+
+    # --- Карточка отеля (заполняет турагентство) ---
+    hotel_name = Column(String(255), nullable=True)
+    hotel_stars = Column(Integer, nullable=True)               # Звёздность отеля 1–5
+    hotel_description = Column(Text, nullable=True)
+    hotel_photos = Column(JSON, default=list, nullable=False)  # Доп. фото отеля (URL)
+    hotel_amenities = Column(JSON, default=dict, nullable=False)  # Удобства по категориям {"Для детей": [...], ...}
+
     # Relationships
     agency_rel = relationship("Agency", back_populates="tours")
     bookings = relationship("Booking", back_populates="tour", cascade="all, delete-orphan")

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -12,7 +13,14 @@ from app.core.limiter import limiter
 from app.database import get_db
 from app.dependencies import get_current_agency_user, get_current_user
 from app.tours.models import Tour
-from app.tours.schemas import CategoryItem, TourCreate, TourResponse, TourUpdate
+from app.tours.schemas import (
+    CategoryItem,
+    TourCreate,
+    TourPromoteRequest,
+    TourPromoteResponse,
+    TourResponse,
+    TourUpdate,
+)
 
 router = APIRouter(prefix="/tours", tags=["Туры"])
 
@@ -53,8 +61,12 @@ def _tour_to_response(tour: Tour) -> TourResponse:
         title=tour.title,
         category=tour.category,
         nights=tour.nights,
+        durationNights=tour.duration_nights or 7,
         dates=tour.dates,
         meal=tour.meal,
+        mealType=tour.meal_type or "AI",
+        hotelStars=tour.hotel_stars or 4,
+        beachLine=tour.beach_line or 1,
         departureCity=tour.departure_city,
         meta=tour.meta,
         rating=tour.rating,
@@ -75,10 +87,13 @@ def _tour_to_response(tour: Tour) -> TourResponse:
         childrenAllowed=bool(tour.children_allowed),
         amenityTags=tour.amenity_tags or [],
         hotelName=tour.hotel_name,
-        hotelStars=tour.hotel_stars,
         hotelDescription=tour.hotel_description,
         hotelPhotos=tour.hotel_photos or [],
         hotelAmenities=tour.hotel_amenities or {},
+        isActive=tour.is_active,
+        isPromoted=tour.is_promoted,
+        promotedUntil=tour.promoted_until,
+        promotionTier=tour.promotion_tier,
     )
 
 
@@ -132,8 +147,15 @@ def get_tours(
     category: Optional[str] = Query(None, description="Фильтр по категории (Пляжный отдых, Горы и т.д.)"),
     search: Optional[str] = Query(None, description="Поиск по названию, городу или агентству"),
     departure_city: Optional[str] = Query(None, alias="departureCity", description="Город вылета"),
-    min_price: Optional[int] = Query(None, alias="minPrice"),
-    max_price: Optional[int] = Query(None, alias="maxPrice"),
+    min_price: Optional[int] = Query(None, alias="minPrice", description="Минимальная цена (₸)"),
+    max_price: Optional[int] = Query(None, alias="maxPrice", description="Максимальная цена (₸)"),
+    hotel_stars: Optional[int] = Query(None, alias="hotelStars", description="Минимум звёзд отеля (1-5)"),
+    meal_type: Optional[str] = Query(None, alias="mealType", description="Тип питания (AI, UAI, BB, HB, FB, RO)"),
+    beach_line: Optional[int] = Query(None, alias="beachLine", description="Линия пляжа (1, 2, 3)"),
+    duration_nights: Optional[int] = Query(None, alias="durationNights", description="Точная длительность ночей"),
+    min_duration: Optional[int] = Query(None, alias="minDuration", description="Минимум ночей"),
+    max_duration: Optional[int] = Query(None, alias="maxDuration", description="Максимум ночей"),
+    min_rating: Optional[float] = Query(None, alias="minRating", description="Минимальный рейтинг тура (напр. 4.5)"),
     agency_id: Optional[str] = Query(None, alias="agencyId"),
     hot: Optional[bool] = Query(None, description="Только горящие туры"),
     guests: Optional[int] = Query(None, ge=1, description="Всего гостей (взрослые + дети)"),
@@ -151,6 +173,13 @@ def get_tours(
         dep=departure_city,
         min_p=min_price,
         max_p=max_price,
+        stars=hotel_stars,
+        meal=meal_type,
+        beach=beach_line,
+        dur=duration_nights,
+        min_dur=min_duration,
+        max_dur=max_duration,
+        rating=min_rating,
         ag=agency_id,
         hot=hot,
         guests=guests,
@@ -169,7 +198,7 @@ def get_tours(
     if category and category != "Все":
         query = query.filter(Tour.category == category)
 
-    if departure_city:
+    if departure_city and departure_city != "Любой":
         query = query.filter(Tour.departure_city.ilike(f"%{departure_city}%"))
 
     if min_price is not None:
@@ -177,6 +206,33 @@ def get_tours(
 
     if max_price is not None:
         query = query.filter(Tour.price_from <= max_price)
+
+    if hotel_stars is not None and hotel_stars > 0:
+        query = query.filter(Tour.hotel_stars >= hotel_stars)
+
+    if meal_type and meal_type != "Все":
+        query = query.filter(
+            or_(
+                Tour.meal_type.ilike(f"%{meal_type}%"),
+                Tour.meal.ilike(f"%{meal_type}%"),
+            )
+        )
+
+    if beach_line is not None and beach_line > 0:
+        # Ищем отели на этой линии пляжа или ближе (например, запрос 2-я линия покажет 1 и 2)
+        query = query.filter(Tour.beach_line <= beach_line)
+
+    if duration_nights is not None:
+        query = query.filter(Tour.duration_nights == duration_nights)
+
+    if min_duration is not None:
+        query = query.filter(Tour.duration_nights >= min_duration)
+
+    if max_duration is not None:
+        query = query.filter(Tour.duration_nights <= max_duration)
+
+    if min_rating is not None:
+        query = query.filter(Tour.rating >= min_rating)
 
     if agency_id:
         query = query.filter(Tour.agency_id == agency_id)
@@ -204,7 +260,8 @@ def get_tours(
         )
         query = query.filter(search_filter)
 
-    ordered = query.order_by(Tour.rating.desc(), Tour.created_at.desc())
+    # Продвигаемые туры (реклама) — выше в выдаче
+    ordered = query.order_by(Tour.is_promoted.desc(), Tour.rating.desc(), Tour.created_at.desc())
 
     # Фильтр по тегам удобств (JSON-список) делаем в Python — переносимо между SQLite и Postgres
     required_tags = [t.strip() for t in amenities.split(",") if t.strip()] if amenities else []
@@ -261,8 +318,12 @@ def create_tour(
         title=tour_in.title,
         category=tour_in.category,
         nights=tour_in.nights,
+        duration_nights=tour_in.duration_nights or 7,
         dates=tour_in.dates,
         meal=tour_in.meal,
+        meal_type=tour_in.meal_type or "AI",
+        hotel_stars=tour_in.hotel_stars or 4,
+        beach_line=tour_in.beach_line or 1,
         departure_city=tour_in.departure_city,
         meta=meta,
         rating=tour_in.rating or 5.0,
@@ -282,7 +343,6 @@ def create_tour(
         children_allowed=tour_in.children_allowed if tour_in.children_allowed is not None else True,
         amenity_tags=tour_in.amenity_tags or [],
         hotel_name=tour_in.hotel_name,
-        hotel_stars=tour_in.hotel_stars,
         hotel_description=tour_in.hotel_description,
         hotel_photos=tour_in.hotel_photos or [],
         hotel_amenities=tour_in.hotel_amenities or {},
@@ -311,6 +371,14 @@ def update_tour(
     for field, val in tour_update.model_dump(exclude_unset=True).items():
         if field == "isActive":
             tour.is_active = val
+        elif field == "durationNights":
+            tour.duration_nights = val
+        elif field == "mealType":
+            tour.meal_type = val
+        elif field == "hotelStars":
+            tour.hotel_stars = val
+        elif field == "beachLine":
+            tour.beach_line = val
         elif hasattr(tour, field) and val is not None:
             setattr(tour, field, val)
 
@@ -355,6 +423,87 @@ def delete_tour(
         raise HTTPException(status_code=403, detail="Нет прав на удаление этого тура")
 
     db.delete(tour)
+    db.commit()
+    cache.delete_pattern("sapar:cache:tours:*")
+    return None
+
+
+@router.post("/{tour_id}/promote", response_model=TourPromoteResponse)
+def promote_tour(
+    tour_id: str,
+    payload: TourPromoteRequest,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Покупка рекламного продвижения тура в каталоге Sapar."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на продвижение этого тура")
+
+    # Расчет стоимости тарифа
+    pricing = {
+        3: 15000,
+        7: 29000,
+        30: 79000,
+    }
+    days = payload.days if payload.days in pricing else 7
+    fee = pricing.get(days, days * 4000)
+
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(days=days)
+
+    tour.is_promoted = True
+    tour.promoted_until = until
+    tour.promotion_tier = payload.tier or "top"
+    db.add(tour)
+
+    # Фиксация финансового дохода в журнале администратора
+    from app.admin.models import FinancialRecord
+    fin_record = FinancialRecord(
+        type="income",
+        category="advertising",
+        amount=fee,
+        title=f"Реклама тура: {tour.title} ({days} дн.)",
+        description=f"Турагентство: {tour.agency_name}. Оплата через {payload.payment_method}. Тариф: {payload.tier}",
+        reference_id=tour.id,
+    )
+    db.add(fin_record)
+
+    db.commit()
+    db.refresh(tour)
+    cache.delete_pattern("sapar:cache:tours:*")
+
+    return TourPromoteResponse(
+        tourId=tour.id,
+        title=tour.title,
+        isPromoted=tour.is_promoted,
+        promotedUntil=tour.promoted_until,
+        promotionTier=tour.promotion_tier,
+        amountPaid=fee,
+        message=f"Тур успешно поднят в ТОП выдачи на {days} дней!",
+    )
+
+
+@router.delete("/{tour_id}/promote", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_tour_promotion(
+    tour_id: str,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Отключение рекламного продвижения тура."""
+    tour = db.query(Tour).filter(Tour.id == tour_id).first()
+    if not tour:
+        raise HTTPException(status_code=404, detail="Тур не найден")
+
+    if current_user.role != "admin" and (not current_user.agency or current_user.agency.id != tour.agency_id):
+        raise HTTPException(status_code=403, detail="Нет прав на управление рекламой этого тура")
+
+    tour.is_promoted = False
+    tour.promoted_until = None
+    tour.promotion_tier = None
     db.commit()
     cache.delete_pattern("sapar:cache:tours:*")
     return None

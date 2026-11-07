@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'create_tour_screen.dart';
+import 'crm_calls_screen.dart';
 
 class AgencyDashboardScreen extends StatefulWidget {
   const AgencyDashboardScreen({super.key});
@@ -215,6 +216,17 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> with Sing
         title: Text('Кабинет турагентства (B2B)', style: AppText.sora(size: 18, weight: FontWeight.w700)),
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.headset_mic_rounded, color: AppColors.teal),
+            tooltip: 'Мини-CRM & Обзвон',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CrmCallsScreen()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.teal,
@@ -801,6 +813,59 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> with Sing
             ],
           ),
           const Divider(height: 18),
+          // Статус рекламы и кнопка продвижения
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: tour.isPromoted ? const Color(0xFFFFFBEB) : AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: tour.isPromoted ? const Color(0xFFFDE68A) : AppColors.border,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.bolt_rounded,
+                  size: 18,
+                  color: tour.isPromoted ? const Color(0xFFD97706) : AppColors.muted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    tour.isPromoted ? 'Реклама активна (ТОП выдачи)' : 'Тур на стандартных позициях',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: tour.isPromoted ? const Color(0xFFB45309) : AppColors.muted,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _showPromoteTourDialog(tour),
+                  icon: Icon(
+                    tour.isPromoted ? Icons.update_rounded : Icons.rocket_launch_rounded,
+                    size: 15,
+                    color: tour.isPromoted ? const Color(0xFFB45309) : AppColors.teal,
+                  ),
+                  label: Text(
+                    tour.isPromoted ? 'Продлить' : 'Продвинуть',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: tour.isPromoted ? const Color(0xFFB45309) : AppColors.teal,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -843,6 +908,244 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> with Sing
           ),
         ],
       ),
+    );
+  }
+
+  void _showPromoteTourDialog(Tour tour) {
+    int selectedDays = 7;
+    String selectedMethod = 'Kaspi Pay';
+    bool isSubmitting = false;
+
+    final tariffs = [
+      {'days': 3, 'title': 'Быстрый старт', 'price': 15000, 'badge': 'Тест'},
+      {'days': 7, 'title': 'Тур недели', 'price': 29000, 'badge': 'Хит'},
+      {'days': 30, 'title': 'Максимальный охват', 'price': 79000, 'badge': 'VIP'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final activeTariff = tariffs.firstWhere((t) => t['days'] == selectedDays);
+            final price = activeTariff['price'] as int;
+
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                top: 24,
+                left: 20,
+                right: 20,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Продвижение тура в ТОП', style: AppText.h3.copyWith(fontSize: 18)),
+                            Text(tour.title, style: AppText.work(size: 13, color: AppColors.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  Text('Выберите срок размещения', style: AppText.work(size: 13, weight: FontWeight.w700, color: AppColors.ink)),
+                  const SizedBox(height: 10),
+
+                  // Карточки тарифов
+                  Row(
+                    children: tariffs.map((t) {
+                      final days = t['days'] as int;
+                      final isSelected = selectedDays == days;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setModalState(() => selectedDays = days),
+                          child: Container(
+                            margin: EdgeInsets.only(right: days != 30 ? 8 : 0),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFFFFFBEB) : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFFF59E0B) : AppColors.border,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFFF59E0B) : AppColors.surface,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    t['badge'] as String,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected ? Colors.white : AppColors.muted,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text('$days дней', style: AppText.work(size: 13, weight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text('${_formatMoney(t['price'] as int)} ₸', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706), fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Преимущества тарифа
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF16A34A)),
+                            SizedBox(width: 6),
+                            Text('Преимущества платного продвижения:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text('• Тур поднимается на 1-е место в каталоге и результатах поиска.', style: AppText.work(size: 11.5, color: const Color(0xFF166534))),
+                        Text('• Золотой бейдж «Реклама • ТОП» привлекает на 300% больше кликов.', style: AppText.work(size: 11.5, color: const Color(0xFF166534))),
+                        Text('• Прямой переход к бронированию и звонкам в агентство.', style: AppText.work(size: 11.5, color: const Color(0xFF166534))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Способ оплаты
+                  Text('Способ оплаты рекламы', style: AppText.work(size: 13, weight: FontWeight.w700, color: AppColors.ink)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: ['Kaspi Pay', 'Банковская карта'].map((m) {
+                      final isSelected = selectedMethod == m;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setModalState(() => selectedMethod = m),
+                          child: Container(
+                            margin: EdgeInsets.only(right: m == 'Kaspi Pay' ? 8 : 0),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.teal.withValues(alpha: 0.08) : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? AppColors.teal : AppColors.border,
+                                width: isSelected ? 1.8 : 1,
+                              ),
+                            ),
+                            child: Text(
+                              m,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? AppColors.teal : AppColors.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Кнопка оплаты
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: isSubmitting
+                          ? null
+                          : () async {
+                              setModalState(() => isSubmitting = true);
+                              final res = await ApiService.promoteTour(
+                                tourId: tour.id,
+                                days: selectedDays,
+                                tier: selectedDays == 30 ? 'vip' : 'top',
+                                paymentMethod: selectedMethod,
+                              );
+
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                if (res != null && res['success'] == true) {
+                                  _loadTours();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.rocket_launch_rounded, color: Colors.white, size: 18),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: Text(res['message']?.toString() ?? 'Тур успешно поднят в ТОП!')),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFFD97706),
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(res?['message']?.toString() ?? 'Ошибка оформления продвижения'),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: isSubmitting
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Text('Оплатить ${_formatMoney(price)} ₸ и запустить', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

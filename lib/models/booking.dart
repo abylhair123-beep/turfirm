@@ -6,6 +6,7 @@ class BookingRequest {
     required this.customerEmail,
     required this.guestsCount,
     required this.paymentMethod,
+    this.referralCode,
   });
 
   final String tourId;
@@ -14,6 +15,7 @@ class BookingRequest {
   final String customerEmail;
   final int guestsCount;
   final String paymentMethod;
+  final String? referralCode;
 
   Map<String, dynamic> toJson() {
     return {
@@ -23,6 +25,8 @@ class BookingRequest {
       'customerEmail': customerEmail,
       'guestsCount': guestsCount,
       'paymentMethod': paymentMethod,
+      if (referralCode != null && referralCode!.trim().isNotEmpty)
+        'referralCode': referralCode!.trim().toUpperCase(),
     };
   }
 }
@@ -41,6 +45,8 @@ class BookingResult {
     required this.serviceFee,
     required this.totalPrice,
     required this.status,
+    this.referralCode,
+    this.referralReward = 0,
     required this.createdAt,
   });
 
@@ -56,6 +62,8 @@ class BookingResult {
   final int serviceFee;
   final int totalPrice;
   final String status;
+  final String? referralCode;
+  final int referralReward;
   final DateTime createdAt;
 
   factory BookingResult.fromJson(Map<String, dynamic> json) {
@@ -72,6 +80,8 @@ class BookingResult {
       serviceFee: (json['serviceFee'] as num? ?? json['service_fee'] as num?)?.toInt() ?? 9800,
       totalPrice: (json['totalPrice'] as num? ?? json['total_price'] as num?)?.toInt() ?? 0,
       status: json['status'] as String? ?? 'paid',
+      referralCode: json['referralCode'] as String? ?? json['referral_code'] as String?,
+      referralReward: (json['referralReward'] as num? ?? json['referral_reward'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

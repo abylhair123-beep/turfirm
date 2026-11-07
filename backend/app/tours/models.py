@@ -17,8 +17,12 @@ class Tour(Base):
     title = Column(String(255), index=True, nullable=False)
     category = Column(String(100), index=True, default="Пляжный отдых", nullable=False)
     nights = Column(String(50), nullable=False)
+    duration_nights = Column(Integer, default=7, nullable=True)
     dates = Column(String(100), nullable=False)
     meal = Column(String(100), nullable=False)
+    meal_type = Column(String(50), default="AI", nullable=True)
+    hotel_stars = Column(Integer, default=4, nullable=True)
+    beach_line = Column(Integer, default=1, nullable=True)
     departure_city = Column(String(100), index=True, default="Алматы", nullable=False)
     meta = Column(String(255), nullable=False)
     rating = Column(Float, default=5.0, nullable=False)
@@ -29,6 +33,9 @@ class Tour(Base):
     description = Column(Text, nullable=False)
     included = Column(JSON, default=list, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_promoted = Column(Boolean, default=False, nullable=False, index=True)
+    promoted_until = Column(DateTime, nullable=True)
+    promotion_tier = Column(String(30), nullable=True)  # "top", "vip", "boost"
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # --- Маркетинг ---
@@ -44,8 +51,8 @@ class Tour(Base):
     amenity_tags = Column(JSON, default=list, nullable=False)  # Теги удобств: all_inclusive, beach_first_line, ...
 
     # --- Карточка отеля (заполняет турагентство) ---
+    # hotel_stars объявлена выше (общая для фильтра и карточки отеля)
     hotel_name = Column(String(255), nullable=True)
-    hotel_stars = Column(Integer, nullable=True)               # Звёздность отеля 1–5
     hotel_description = Column(Text, nullable=True)
     hotel_photos = Column(JSON, default=list, nullable=False)  # Доп. фото отеля (URL)
     hotel_amenities = Column(JSON, default=dict, nullable=False)  # Удобства по категориям {"Для детей": [...], ...}

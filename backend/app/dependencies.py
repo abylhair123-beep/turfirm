@@ -75,3 +75,15 @@ def get_current_admin(
             detail="Требуются права администратора",
         )
     return current_user
+
+
+def get_current_client_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if current_user.role not in ("client", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ разрешен клиентам платформы и администраторам",
+        )
+    return current_user
+

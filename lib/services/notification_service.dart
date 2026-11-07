@@ -40,22 +40,29 @@ class NotificationService {
     final context = navigatorKey.currentContext;
     if (context == null) return;
 
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
 
+    OverlayEntry? entry;
     entry = OverlayEntry(
       builder: (context) => _PushBannerWidget(
         title: title,
         body: body,
         onDismiss: () {
-          if (entry.mounted) entry.remove();
+          if (entry != null && entry!.mounted) {
+            entry!.remove();
+            entry = null;
+          }
         },
       ),
     );
 
-    overlay.insert(entry);
+    overlay.insert(entry!);
     Future.delayed(const Duration(seconds: 4), () {
-      if (entry.mounted) entry.remove();
+      if (entry != null && entry!.mounted) {
+        entry!.remove();
+        entry = null;
+      }
     });
   }
 
@@ -109,8 +116,10 @@ class _PushBannerWidgetState extends State<_PushBannerWidget>
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    final topPadding = mediaQuery?.padding.top ?? 20.0;
     return Positioned(
-      top: 16,
+      top: topPadding > 0 ? topPadding + 10 : 24,
       left: 16,
       right: 16,
       child: SlideTransition(

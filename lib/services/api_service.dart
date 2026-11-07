@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
+import '../models/crm_models.dart';
+import '../models/financial_summary.dart';
+import '../models/referral.dart';
 import '../models/review.dart';
 import '../models/tour.dart';
 import '../models/user.dart';
@@ -113,9 +116,8 @@ class PromoResult {
 }
 
 class ApiService {
-  // Порт Sapar-бэкенда. Сейчас 8001, т.к. порт 8000 занят другим проектом.
-  // Когда освободишь 8000 — верни сюда 8000 (одно место).
-  static const int _apiPort = 8001;
+  // Порт Sapar-бэкенда.
+  static const int _apiPort = 8000;
 
   static String get defaultBaseUrl {
     if (kIsWeb) {
@@ -205,6 +207,8 @@ class ApiService {
           email: data['email'] as String? ?? email,
           fullName: data['full_name'] as String? ?? 'Пользователь',
           role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? data['is_phone_verified'] as bool? ?? false,
         );
         userNotifier.value = _currentUser;
 
@@ -256,6 +260,8 @@ class ApiService {
           fullName: data['full_name'] as String? ?? fullName,
           phone: phone,
           role: data['role'] as String? ?? role,
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? data['is_phone_verified'] as bool? ?? false,
         );
         userNotifier.value = _currentUser;
 
@@ -301,6 +307,24 @@ class ApiService {
     await prefs.remove('auth_user');
   }
 
+  /// Полное удаление аккаунта (Apple App Store Guideline 5.1.1(v) Account Deletion)
+  static Future<bool> deleteAccount() async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/me');
+      final response = await http
+          .delete(uri, headers: _headers())
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        await logout();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] Delete account error: $e');
+    }
+    await logout();
+    return true;
+  }
+
   /// Запрос 4-значного OTP-кода по SMS
   static Future<Map<String, dynamic>> sendSmsOtp(String phone) async {
     try {
@@ -344,6 +368,8 @@ class ApiService {
           fullName: data['full_name'] as String? ?? 'Турист',
           phone: phone,
           role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: true,
         );
         userNotifier.value = _currentUser;
 
@@ -356,6 +382,135 @@ class ApiService {
       debugPrint('[ApiService] verifySmsOtp error: $e');
     }
     return null;
+  }
+
+  /// Запрос восстановления пароля (по Email или SMS)
+  static Future<Map<String, dynamic>> forgotPassword(String identifier) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/forgot-password');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'identifier': identifier.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Код сброса отправлен',
+          'channel': data['channel'] ?? 'email',
+          'devCode': data['devCode'],
+        };
+      }
+      return {'success': false, 'message': data['detail'] ?? 'Ошибка запроса сброса'};
+    } catch (e) {
+      return {'success': false, 'message': 'Сетевая ошибка: $e'};
+    }
+  }
+
+  /// Сброс пароля с новым кодом
+  static Future<AppUser?> resetPassword({
+    required String identifier,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/reset-password');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({
+              'identifier': identifier.trim(),
+              'code': code.trim(),
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        _token = data['access_token'] as String?;
+        _currentUser = AppUser(
+          id: data['user_id'] as String? ?? '',
+          email: data['email'] as String? ?? identifier,
+          fullName: data['full_name'] as String? ?? 'Пользователь',
+          role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? false,
+        );
+        userNotifier.value = _currentUser;
+
+        final prefs = await SharedPreferences.getInstance();
+        if (_token != null) await prefs.setString('auth_token', _token!);
+        await prefs.setString('auth_user', jsonEncode(_currentUser!.toJson()));
+        return _currentUser;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] resetPassword error: $e');
+    }
+    return null;
+  }
+
+  /// Отправка кода подтверждения Email
+  static Future<Map<String, dynamic>> sendEmailVerificationCode(String email) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/email/send-code');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'email': email.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': data['message'], 'devCode': data['devCode']};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'Ошибка отправки кода'};
+    } catch (e) {
+      return {'success': false, 'message': 'Сетевая ошибка: $e'};
+    }
+  }
+
+  /// Проверка кода подтверждения Email
+  static Future<bool> verifyEmailCode(String email, String code) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/email/verify-code');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'email': email.trim(), 'code': code.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        if (_currentUser != null && _currentUser!.email.toLowerCase() == email.toLowerCase().trim()) {
+          _currentUser = AppUser(
+            id: _currentUser!.id,
+            email: _currentUser!.email,
+            fullName: _currentUser!.fullName,
+            phone: _currentUser!.phone,
+            role: _currentUser!.role,
+            isActive: _currentUser!.isActive,
+            isEmailVerified: true,
+            isPhoneVerified: _currentUser!.isPhoneVerified,
+          );
+          userNotifier.value = _currentUser;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('auth_user', jsonEncode(_currentUser!.toJson()));
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] verifyEmailCode error: $e');
+    }
+    return false;
   }
 
   /// Получить URL для открытия или скачивания официального PDF-ваучера
@@ -379,7 +534,7 @@ class ApiService {
 
   // ==================== ТУРЫ ====================
 
-  /// Получение каталога туров с поддержкой фильтрации
+  /// Получение каталога туров с поддержкой расширенной фильтрации
   static Future<List<Tour>> getTours({
     String? category,
     String? search,
@@ -390,6 +545,13 @@ class ApiService {
     int? children,
     List<String>? amenities,
     List<int>? stars,
+    int? hotelStars,
+    String? mealType,
+    int? beachLine,
+    int? durationNights,
+    int? minDuration,
+    int? maxDuration,
+    double? minRating,
   }) async {
     try {
       final queryParams = <String, String>{};
@@ -419,6 +581,27 @@ class ApiService {
       }
       if (stars != null && stars.isNotEmpty) {
         queryParams['stars'] = stars.join(',');
+      }
+      if (hotelStars != null && hotelStars > 0) {
+        queryParams['hotelStars'] = hotelStars.toString();
+      }
+      if (mealType != null && mealType.isNotEmpty && mealType != 'Все') {
+        queryParams['mealType'] = mealType;
+      }
+      if (beachLine != null && beachLine > 0) {
+        queryParams['beachLine'] = beachLine.toString();
+      }
+      if (durationNights != null && durationNights > 0) {
+        queryParams['durationNights'] = durationNights.toString();
+      }
+      if (minDuration != null && minDuration > 0) {
+        queryParams['minDuration'] = minDuration.toString();
+      }
+      if (maxDuration != null && maxDuration > 0) {
+        queryParams['maxDuration'] = maxDuration.toString();
+      }
+      if (minRating != null && minRating > 0) {
+        queryParams['minRating'] = minRating.toString();
       }
 
       final uri = Uri.parse('$baseUrl/tours').replace(
@@ -459,6 +642,27 @@ class ApiService {
     }
     if (maxPrice != null && maxPrice > 0) {
       filtered = filtered.where((t) => t.priceFrom <= maxPrice).toList();
+    }
+    if (hotelStars != null && hotelStars > 0) {
+      filtered = filtered.where((t) => t.hotelStars >= hotelStars).toList();
+    }
+    if (mealType != null && mealType.isNotEmpty && mealType != 'Все') {
+      filtered = filtered.where((t) => t.mealType == mealType || t.meal.contains(mealType)).toList();
+    }
+    if (beachLine != null && beachLine > 0) {
+      filtered = filtered.where((t) => t.beachLine <= beachLine).toList();
+    }
+    if (durationNights != null && durationNights > 0) {
+      filtered = filtered.where((t) => t.durationNights == durationNights).toList();
+    }
+    if (minDuration != null && minDuration > 0) {
+      filtered = filtered.where((t) => t.durationNights >= minDuration).toList();
+    }
+    if (maxDuration != null && maxDuration > 0) {
+      filtered = filtered.where((t) => t.durationNights <= maxDuration).toList();
+    }
+    if (minRating != null && minRating > 0) {
+      filtered = filtered.where((t) => t.rating >= minRating).toList();
     }
     return filtered;
   }
@@ -1066,5 +1270,442 @@ class ApiService {
       return '$baseUrl/agencies/me/bookings/export-xlsx?status=$status';
     }
     return '$baseUrl/agencies/me/bookings/export-xlsx';
+  }
+
+  // ==================== РЕФЕРАЛЬНАЯ ПРОГРАММА ДЛЯ БЛОГЕРОВ ====================
+
+  static String? _activeReferralCode;
+
+  /// Активный реферальный код, сохраненный при переходе по ссылке
+  static String? get activeReferralCode => _activeReferralCode;
+
+  static void setActiveReferralCode(String? code) {
+    if (code != null && code.trim().isNotEmpty) {
+      _activeReferralCode = code.trim().toUpperCase();
+    }
+  }
+
+  /// Получение сводной статистики и реферальных ссылок блогера
+  static Future<ReferralStats?> getReferralStats() async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/stats');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralStats.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getReferralStats error: $e');
+    }
+    return null;
+  }
+
+  /// Список кампаний/ссылок блогера
+  static Future<List<ReferralCampaign>> getReferralCampaigns() async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/me');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((e) => ReferralCampaign.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getReferralCampaigns error: $e');
+    }
+    return [];
+  }
+
+  /// Создание новой реферальной ссылки/кампании
+  static Future<ReferralCampaign?> createReferralCampaign({
+    String? code,
+    String? campaignName,
+    double? commissionRate,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/campaigns');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              if (code != null && code.trim().isNotEmpty) 'code': code.trim().toUpperCase(),
+              if (campaignName != null && campaignName.trim().isNotEmpty) 'campaignName': campaignName.trim(),
+              if (commissionRate != null) 'commissionRate': commissionRate,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralCampaign.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createReferralCampaign error: $e');
+    }
+    return null;
+  }
+
+  /// Трекинг клика по реферальной ссылке
+  static Future<bool> trackReferralClick(String code, {String? tourId, String? referrerUrl}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/click');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({
+              'code': code.trim().toUpperCase(),
+              if (tourId != null) 'tourId': tourId,
+              if (referrerUrl != null) 'referrerUrl': referrerUrl,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] trackReferralClick error: $e');
+      return false;
+    }
+  }
+
+  /// Проверка промокода блогера при бронировании
+  static Future<ReferralCheckResult> checkReferralCode(String code) async {
+    try {
+      final clean = code.trim().toUpperCase();
+      final uri = Uri.parse('$baseUrl/referrals/check/$clean');
+      final response = await http.get(uri, headers: _headers(withAuth: false)).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralCheckResult.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] checkReferralCode error: $e');
+    }
+    return ReferralCheckResult(
+      valid: false,
+      code: code,
+      message: 'Не удалось проверить промокод',
+    );
+  }
+
+  /// Запрос на вывод партнерского вознаграждения
+  static Future<Map<String, dynamic>> requestReferralPayout({
+    required int amount,
+    required String paymentDetails,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/referrals/payout');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'amount': amount,
+              'paymentDetails': paymentDetails.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Заявка принята',
+          'remainingBalance': data['remainingBalance'] ?? 0,
+        };
+      }
+      return {
+        'success': false,
+        'message': data['detail'] ?? 'Ошибка вывода средств',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Сетевая ошибка: $e',
+      };
+    }
+  }
+
+  // ==================== АДМИН-ПАНЕЛЬ: ФИНАНСЫ И БАЛАНС ====================
+
+  /// Получение финансовой сводки платформы (приходы, расходы, чистая прибыль)
+  static Future<FinancialSummary?> getAdminFinancialSummary({String period = 'all'}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/admin/finances/summary?period=$period');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return FinancialSummary.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAdminFinancialSummary error: $e');
+    }
+    return null;
+  }
+
+  /// Внесение новой финансовой проводки (рекламный доход, маркетинговый расход)
+  static Future<FinancialRecordItem?> createAdminFinancialRecord({
+    required String type,
+    required String category,
+    required int amount,
+    required String title,
+    String? description,
+    String? referenceId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/admin/finances/records');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'type': type,
+              'category': category,
+              'amount': amount,
+              'title': title.trim(),
+              if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+              if (referenceId != null && referenceId.trim().isNotEmpty) 'referenceId': referenceId.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return FinancialRecordItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createAdminFinancialRecord error: $e');
+    }
+    return null;
+  }
+
+  // ==================== СИСТЕМА РЕКЛАМЫ И ПРОДВИЖЕНИЯ ТУРОВ ====================
+
+  /// Покупка рекламного продвижения тура в ТОП
+  static Future<Map<String, dynamic>?> promoteTour({
+    required String tourId,
+    int days = 7,
+    String tier = 'top',
+    String paymentMethod = 'Kaspi Pay',
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId/promote');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'days': days,
+              'tier': tier,
+              'paymentMethod': paymentMethod,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Тур успешно поднят в ТОП!',
+          'isPromoted': data['isPromoted'] ?? true,
+          'promotedUntil': data['promotedUntil'],
+          'amountPaid': data['amountPaid'] ?? 29000,
+        };
+      }
+      return {
+        'success': false,
+        'message': data['detail'] ?? 'Не удалось оформить продвижение',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Сетевая ошибка: $e',
+      };
+    }
+  }
+
+  /// Отключение рекламного продвижения
+  static Future<bool> cancelTourPromotion(String tourId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tours/$tourId/promote');
+      final response = await http.delete(uri, headers: _headers()).timeout(const Duration(seconds: 5));
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] cancelTourPromotion error: $e');
+      return false;
+    }
+  }
+
+  // ==================== МИНИ-CRM И ОБЗВОН (КЛИЕНТЫ И ТУРФИРМЫ) ====================
+
+  /// Получение умной очереди обзвона (новые брони, перезвоны, турфирмы)
+  static Future<List<CallQueueItem>> getCallQueue({
+    String targetType = 'all',
+    String? search,
+  }) async {
+    try {
+      final queryParams = <String, String>{'target_type': targetType};
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      final uri = Uri.parse('$baseUrl/crm/calls/queue').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => CallQueueItem.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallQueue error: $e');
+    }
+    return [];
+  }
+
+  /// Получение истории и логов звонков с фильтрацией
+  static Future<List<CallLogItem>> getCallLogs({
+    String? status,
+    String? targetType,
+    String? search,
+    int limit = 50,
+  }) async {
+    try {
+      final queryParams = <String, String>{'limit': limit.toString()};
+      if (status != null && status != 'all') queryParams['status'] = status;
+      if (targetType != null && targetType != 'all') queryParams['target_type'] = targetType;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final uri = Uri.parse('$baseUrl/crm/calls/logs').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => CallLogItem.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallLogs error: $e');
+    }
+    return [];
+  }
+
+  /// Получение аналитики и сводной статистики обзвона
+  static Future<CallStats?> getCallStats() async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/stats');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallStats.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallStats error: $e');
+    }
+    return null;
+  }
+
+  /// Фиксация звонка менеджером (ручной ввод или click-to-call)
+  static Future<CallLogItem?> createCallLog({
+    required String targetType,
+    required String targetName,
+    required String targetPhone,
+    String direction = 'outbound',
+    String? bookingId,
+    String? agencyId,
+    required String status,
+    int durationSeconds = 0,
+    String? notes,
+    DateTime? scheduledCallbackAt,
+    String telephonyProvider = 'manual',
+    String? recordingUrl,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/logs');
+      final body = <String, dynamic>{
+        'target_type': targetType,
+        'target_name': targetName,
+        'target_phone': targetPhone,
+        'direction': direction,
+        'booking_id': bookingId,
+        'agency_id': agencyId,
+        'status': status,
+        'duration_seconds': durationSeconds,
+        'notes': notes,
+        'scheduled_callback_at': scheduledCallbackAt?.toIso8601String(),
+        'telephony_provider': telephonyProvider,
+        'recording_url': recordingUrl,
+      };
+
+      final response = await http
+          .post(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createCallLog error: $e');
+    }
+    return null;
+  }
+
+  /// Обновление статуса звонка или заметок
+  static Future<CallLogItem?> updateCallLog({
+    required String callId,
+    String? status,
+    int? durationSeconds,
+    String? notes,
+    DateTime? scheduledCallbackAt,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/logs/$callId');
+      final body = <String, dynamic>{};
+      if (status != null) body['status'] = status;
+      if (durationSeconds != null) body['duration_seconds'] = durationSeconds;
+      if (notes != null) body['notes'] = notes;
+      if (scheduledCallbackAt != null) body['scheduled_callback_at'] = scheduledCallbackAt.toIso8601String();
+
+      final response = await http
+          .patch(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] updateCallLog error: $e');
+    }
+    return null;
+  }
+
+  /// Симуляция / запуск автообзвона через виртуальную IP-АТС
+  static Future<CallLogItem?> simulateVoipCall({
+    required String targetPhone,
+    required String targetName,
+    String targetType = 'customer',
+    String? bookingId,
+    String? agencyId,
+    String simulatedOutcome = 'successful',
+    String? notes,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/simulate-voip');
+      final body = <String, dynamic>{
+        'target_phone': targetPhone,
+        'target_name': targetName,
+        'target_type': targetType,
+        'booking_id': bookingId,
+        'agency_id': agencyId,
+        'simulated_outcome': simulatedOutcome,
+        'notes': notes,
+      };
+
+      final response = await http
+          .post(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] simulateVoipCall error: $e');
+    }
+    return null;
   }
 }

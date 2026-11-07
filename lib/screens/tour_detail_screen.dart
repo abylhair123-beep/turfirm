@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/review.dart';
 import '../models/tour.dart';
 import '../services/api_service.dart';
@@ -205,11 +206,11 @@ class _TourDetailScreenState extends State<TourDetailScreen> {
                 Row(
                   children: [
                     Expanded(child: Text(tour.hotelName!, style: AppText.h4)),
-                    if (tour.hotelStars != null && tour.hotelStars! > 0)
+                    if (tour.hotelStars > 0)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: List.generate(
-                          tour.hotelStars!,
+                          tour.hotelStars,
                           (_) => const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF39C12)),
                         ),
                       ),
@@ -540,6 +541,47 @@ class _HeroState extends State<_Hero> {
             ),
           ),
 
+          // Кнопка «Поделиться туром / Реферальная ссылка»
+          Positioned(
+            top: 18,
+            right: 62,
+            child: GestureDetector(
+              onTap: () {
+                final refCode = ApiService.activeReferralCode ?? 'SAPAR';
+                final shareUrl = 'https://sapar.kz/tours/${tour.id}?ref=$refCode';
+                Clipboard.setData(ClipboardData(text: shareUrl));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text('Ссылка на тур скопирована: $shareUrl')),
+                      ],
+                    ),
+                    backgroundColor: AppColors.teal,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.ink.withValues(alpha: 0.42),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.share_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // Кнопка избранного
           Positioned(
             top: 18,
@@ -576,23 +618,61 @@ class _HeroState extends State<_Hero> {
           Positioned(
             left: 20,
             bottom: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.ink.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const AppIcon(AppIcons.pin, size: 13, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(
-                    tour.destination,
-                    style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white),
+            child: Row(
+              children: [
+                if (tour.isPromoted) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'Реклама • ТОП',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.ink.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const AppIcon(AppIcons.pin, size: 13, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        tour.destination,
+                        style: AppText.work(size: 12.5, weight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
 

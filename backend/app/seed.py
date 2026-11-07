@@ -10,8 +10,12 @@ from app.auth.models import User
 from app.bookings.models import Booking
 from app.core.cache import cache
 from app.core.security import get_password_hash
+from app.crm.models import CallLog
 from app.database import Base, SessionLocal, engine
+from app.favorites.models import Favorite
+from app.payments.models import Payment
 from app.promo.models import PromoCode
+from app.referrals.models import ReferralPartner
 from app.reviews.models import Review
 from app.tours.models import Tour
 
@@ -297,8 +301,12 @@ def seed_data(db: Session) -> None:
             title="Тур в Анталию",
             category="Пляжный отдых",
             nights="7 ночей",
+            duration_nights=7,
             dates="12–19 окт",
             meal="Всё вкл.",
+            meal_type="AI",
+            hotel_stars=4,
+            beach_line=1,
             departure_city="Алматы",
             meta="7 ночей · вылет 12 окт · всё включено",
             rating=4.8,
@@ -328,8 +336,12 @@ def seed_data(db: Session) -> None:
             title="Дубай Delight",
             category="Пляжный отдых",
             nights="5 ночей",
+            duration_nights=5,
             dates="18–23 окт",
             meal="Завтраки",
+            meal_type="BB",
+            hotel_stars=5,
+            beach_line=2,
             departure_city="Алматы",
             meta="5 ночей · вылет 18 окт · завтраки",
             rating=4.9,
@@ -358,8 +370,12 @@ def seed_data(db: Session) -> None:
             title="Горный уикенд на Шымбулаке",
             category="Горы",
             nights="4 ночи",
+            duration_nights=4,
             dates="24–28 окт",
             meal="Завтраки",
+            meal_type="BB",
+            hotel_stars=4,
+            beach_line=0,
             departure_city="Алматы",
             meta="4 ночи · вылет 24 окт · спа-отель",
             rating=4.9,
@@ -388,8 +404,12 @@ def seed_data(db: Session) -> None:
             title="Гранд-тур по Италии",
             category="Визовые туры",
             nights="7 ночей",
+            duration_nights=7,
             dates="05–12 ноя",
             meal="Завтраки",
+            meal_type="BB",
+            hotel_stars=4,
+            beach_line=0,
             departure_city="Алматы",
             meta="7 ночей · вылет 5 ноя · визовая помощь",
             rating=4.7,
@@ -419,8 +439,12 @@ def seed_data(db: Session) -> None:
             title="Оздоровительный тур в Сарыагаш",
             category="Санатории",
             nights="10 ночей",
+            duration_nights=10,
             dates="10–20 окт",
             meal="3-разовое",
+            meal_type="FB",
+            hotel_stars=4,
+            beach_line=0,
             departure_city="Шымкент",
             meta="10 ночей · выезд 10 окт · полный пансион",
             rating=4.8,
@@ -449,8 +473,12 @@ def seed_data(db: Session) -> None:
             title="Круиз по Средиземному морю",
             category="Круизы",
             nights="7 ночей",
+            duration_nights=7,
             dates="15–22 ноя",
             meal="Всё вкл.",
+            meal_type="UAI",
+            hotel_stars=5,
+            beach_line=1,
             departure_city="Алматы",
             meta="7 ночей · вылет 15 ноя · лайнер 5★",
             rating=4.9,
@@ -516,6 +544,130 @@ def seed_data(db: Session) -> None:
     apply_demo_hotels(db)
     cache.delete_pattern("sapar:cache:tours:*")
     logger.info("Successfully seeded Sapar database!")
+    seed_referrals(db)
+
+
+def seed_referrals(db: Session) -> None:
+    """Сидирование реферальных кампаний для блогеров."""
+    if db.query(ReferralPartner).first():
+        return
+
+    client_user = db.query(User).filter(User.email == "aigerim@mail.kz").first()
+    if not client_user:
+        return
+
+    logger.info("Seeding initial referral campaigns for blogger...")
+    partner1 = ReferralPartner(
+        id="ref-partner-1",
+        user_id=client_user.id,
+        code="TRAVEL_KZ",
+        campaign_name="Instagram Stories (@aigerim_travel)",
+        commission_rate=3.0,
+        fixed_reward=0,
+        clicks_count=142,
+        bookings_count=6,
+        total_earned=44100,
+        balance=44100,
+        is_active=True,
+    )
+    partner2 = ReferralPartner(
+        id="ref-partner-2",
+        user_id=client_user.id,
+        code="SAPAR_SPECIAL",
+        campaign_name="TikTok / Reels",
+        commission_rate=3.0,
+        fixed_reward=0,
+        clicks_count=85,
+        bookings_count=3,
+        total_earned=22050,
+        balance=22050,
+        is_active=True,
+    )
+    db.add_all([partner1, partner2])
+    db.commit()
+    seed_crm_calls(db)
+
+
+def seed_crm_calls(db: Session) -> None:
+    """Сидирование логов обзвона и очереди мини-CRM."""
+    if db.query(CallLog).first():
+        return
+
+    admin_user = db.query(User).filter(User.role == "admin").first()
+    manager_id = admin_user.id if admin_user else None
+
+    booking = db.query(Booking).first()
+    agency = db.query(Agency).first()
+
+    now = datetime.now(timezone.utc)
+
+    calls = [
+        CallLog(
+            id="CALL-0001",
+            direction="outbound",
+            target_type="customer",
+            target_name=booking.customer_name if booking else "Айгерим Касымова",
+            target_phone=booking.customer_phone if booking else "+7 701 555 12 34",
+            booking_id=booking.id if booking else None,
+            user_id=booking.user_id if booking else None,
+            agency_id=booking.agency_id if booking else None,
+            manager_id=manager_id,
+            status="successful",
+            duration_seconds=138,
+            notes="Подтвердили даты вылета и визовые анкеты. Клиентка попросила отель с детским клубом.",
+            telephony_provider="mango",
+            recording_url="https://storage.sapar.travel/recordings/call-0001.mp3",
+            external_call_id="MANGO-90812",
+            created_at=now - timedelta(hours=3),
+        ),
+        CallLog(
+            id="CALL-0002",
+            direction="outbound",
+            target_type="customer",
+            target_name="Арман Жумабеков",
+            target_phone="+7 777 444 88 99",
+            booking_id=booking.id if booking else None,
+            manager_id=manager_id,
+            status="callback_needed",
+            duration_seconds=42,
+            notes="На совещании. Попросил перезвонить в 18:30 для согласования медицинского страхования.",
+            scheduled_callback_at=now + timedelta(hours=2),
+            telephony_provider="manual",
+            created_at=now - timedelta(hours=1),
+        ),
+        CallLog(
+            id="CALL-0003",
+            direction="outbound",
+            target_type="agency",
+            target_name=agency.name if agency else "Sapar Travel Almaty",
+            target_phone=agency.phone if agency and agency.phone else "+7 727 300 11 22",
+            agency_id=agency.id if agency else None,
+            manager_id=manager_id,
+            status="successful",
+            duration_seconds=210,
+            notes="Согласовали блок мест на чартер в Шарм-эль-Шейх и агентскую комиссию 12%.",
+            telephony_provider="zadarma",
+            recording_url="https://storage.sapar.travel/recordings/call-0003.mp3",
+            external_call_id="ZADARMA-44102",
+            created_at=now - timedelta(minutes=40),
+        ),
+        CallLog(
+            id="CALL-0004",
+            direction="outbound",
+            target_type="customer",
+            target_name="Динара Серикова",
+            target_phone="+7 702 333 77 11",
+            manager_id=manager_id,
+            status="no_answer",
+            duration_seconds=0,
+            notes="Гудки идут, трубку не взяли. Поставлена задача на повторный звонок через час.",
+            telephony_provider="simulator",
+            created_at=now - timedelta(minutes=15),
+        ),
+    ]
+    db.add_all(calls)
+    db.commit()
+    logger.info("Successfully seeded CRM call logs!")
 
 
 if __name__ == "__main__":

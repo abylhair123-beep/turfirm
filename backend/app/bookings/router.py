@@ -55,6 +55,8 @@ def _booking_to_response(b: Booking) -> BookingResponse:
         serviceFee=b.service_fee,
         totalPrice=b.total_price,
         status=b.status,
+        referralCode=b.referral_code,
+        referralReward=b.referral_reward or 0,
         createdAt=b.created_at,
     )
 
@@ -85,6 +87,25 @@ def create_booking(
             detail=f"Недостаточно свободных мест: осталось {tour.seats_left}",
         )
 
+    # Обработка реферального кода блогера/партнера
+    referral_code = booking_in.referral_code.strip().upper() if booking_in.referral_code and booking_in.referral_code.strip() else None
+    referral_partner = None
+    referral_reward = 0
+    if referral_code:
+        from app.referrals.models import ReferralPartner
+        referral_partner = (
+            db.query(ReferralPartner)
+            .filter(ReferralPartner.code == referral_code, ReferralPartner.is_active.is_(True))
+            .first()
+        )
+        if referral_partner:
+            rate = referral_partner.commission_rate if referral_partner.commission_rate is not None else 3.0
+            referral_reward = int((tour_price * guests) * (rate / 100.0)) + (referral_partner.fixed_reward or 0)
+            referral_partner.bookings_count += 1
+            referral_partner.total_earned += referral_reward
+            referral_partner.balance += referral_reward
+            db.add(referral_partner)
+
     booking = Booking(
         tour_id=tour.id,
         agency_id=tour.agency_id,
@@ -98,6 +119,9 @@ def create_booking(
         service_fee=service_fee,
         total_price=total_price,
         status="paid",  # Mark as paid since user selects payment method and pays
+        referral_code=referral_partner.code if referral_partner else referral_code,
+        referral_reward=referral_reward,
+        referral_partner_id=referral_partner.id if referral_partner else None,
     )
     db.add(booking)
 
@@ -121,49 +145,73 @@ def create_booking(
 
 @router.get("", response_model=List[BookingResponse])
 def get_bookings(
-    email: Optional[str] = Query(None, description="Поиск по email клиента"),
-    phone: Optional[str] = Query(None, description="Поиск по телефону клиента"),
     agency_id: Optional[str] = Query(None, alias="agencyId"),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Список бронирований с жестким разграничением прав:
+    - client: только свои бронирования
+    - agency: только бронирования туров своего агентства
+    - admin: все бронирования платформы (с опциональным фильтром agencyId)
+    """
     query = db.query(Booking)
 
-    if current_user:
-        if current_user.role == "agency" and current_user.agency:
-            query = query.filter(Booking.agency_id == current_user.agency.id)
-        elif current_user.role == "client":
-            query = query.filter(Booking.user_id == current_user.id)
-        # admin can see all or apply filters below
-    elif not email and not phone:
-        # If not authenticated and no contact filters provided, return empty
+    if current_user.role == "client":
+        query = query.filter(Booking.user_id == current_user.id)
+    elif current_user.role == "agency":
+        if not current_user.agency:
+            return []
+        query = query.filter(Booking.agency_id == current_user.agency.id)
+    elif current_user.role == "admin":
+        if agency_id:
+            query = query.filter(Booking.agency_id == agency_id)
+    else:
         return []
-
-    if email:
-        query = query.filter(Booking.customer_email.ilike(f"%{email}%"))
-    if phone:
-        query = query.filter(Booking.customer_phone.ilike(f"%{phone}%"))
-    if agency_id:
-        query = query.filter(Booking.agency_id == agency_id)
 
     bookings = query.order_by(Booking.created_at.desc()).all()
     return [_booking_to_response(b) for b in bookings]
 
 
 @router.get("/{booking_id}", response_model=BookingResponse)
-def get_booking(booking_id: str, db: Session = Depends(get_db)):
+def get_booking(
+    booking_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Получение детальной информации о бронировании с проверкой прав доступа:
+    - Зарегистрированные бронирования защищены и доступны только владельцу, агентству тура или админу.
+    """
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Бронирование не найдено")
+
+    if booking.user_id:
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Требуется авторизация для просмотра этого бронирования")
+        if current_user.role == "client" and booking.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен: чужое бронирование")
+        if current_user.role == "agency" and (not current_user.agency or booking.agency_id != current_user.agency.id):
+            raise HTTPException(status_code=403, detail="Доступ запрещен: бронирование другого турагентства")
+
     return _booking_to_response(booking)
 
 
 @router.get("/{booking_id}/voucher.pdf", response_class=Response)
-def get_booking_voucher_pdf(booking_id: str, db: Session = Depends(get_db)):
+def get_booking_voucher_pdf(
+    booking_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """Генерация официального туристического PDF-ваучера с QR-кодом, отелем, трансфером и страховкой."""
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         raise HTTPException(status_code=404, detail="Бронирование не найдено")
+
+    if current_user:
+        if current_user.role == "client" and booking.user_id and booking.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Доступ запрещен: чужой ваучер")
+        if current_user.role == "agency" and (not current_user.agency or booking.agency_id != current_user.agency.id):
+            raise HTTPException(status_code=403, detail="Доступ запрещен: ваучер другого агентства")
 
     tour = db.query(Tour).filter(Tour.id == booking.tour_id).first()
     agency = db.query(Agency).filter(Agency.id == booking.agency_id).first()

@@ -8,8 +8,12 @@ class TourBase(BaseModel):
     destination: str
     category: str = "Пляжный отдых"
     nights: str
+    duration_nights: Optional[int] = Field(default=7, alias="durationNights")
     dates: str
     meal: str
+    meal_type: Optional[str] = Field(default="AI", alias="mealType")
+    hotel_stars: Optional[int] = Field(default=4, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=1, alias="beachLine")
     departure_city: str = Field(default="Алматы", alias="departureCity")
     meta: Optional[str] = None
     price_from: int = Field(alias="priceFrom")
@@ -17,6 +21,9 @@ class TourBase(BaseModel):
     photo_url: Optional[str] = Field(default=None, alias="photoUrl")
     description: str
     included: List[str] = Field(default_factory=list)
+    is_promoted: bool = Field(default=False, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
@@ -51,8 +58,12 @@ class TourUpdate(BaseModel):
     destination: Optional[str] = None
     category: Optional[str] = None
     nights: Optional[str] = None
+    duration_nights: Optional[int] = Field(default=None, alias="durationNights")
     dates: Optional[str] = None
     meal: Optional[str] = None
+    meal_type: Optional[str] = Field(default=None, alias="mealType")
+    hotel_stars: Optional[int] = Field(default=None, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=None, alias="beachLine")
     departure_city: Optional[str] = Field(default=None, alias="departureCity")
     meta: Optional[str] = None
     price_from: Optional[int] = Field(default=None, alias="priceFrom")
@@ -72,10 +83,12 @@ class TourUpdate(BaseModel):
     children_allowed: Optional[bool] = Field(default=None, alias="childrenAllowed")
     amenity_tags: Optional[List[str]] = Field(default=None, alias="amenityTags")
     hotel_name: Optional[str] = Field(default=None, alias="hotelName")
-    hotel_stars: Optional[int] = Field(default=None, alias="hotelStars")
     hotel_description: Optional[str] = Field(default=None, alias="hotelDescription")
     hotel_photos: Optional[List[str]] = Field(default=None, alias="hotelPhotos")
     hotel_amenities: Optional[Dict[str, List[str]]] = Field(default=None, alias="hotelAmenities")
+    is_promoted: Optional[bool] = Field(default=None, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
@@ -91,8 +104,12 @@ class TourResponse(BaseModel):
     title: str
     category: str
     nights: str
+    duration_nights: Optional[int] = Field(default=7, alias="durationNights")
     dates: str
     meal: str
+    meal_type: Optional[str] = Field(default="AI", alias="mealType")
+    hotel_stars: Optional[int] = Field(default=4, alias="hotelStars")
+    beach_line: Optional[int] = Field(default=1, alias="beachLine")
     departure_city: str = Field(alias="departureCity")
     meta: str
     rating: float
@@ -116,14 +133,42 @@ class TourResponse(BaseModel):
     amenity_tags: List[str] = Field(default_factory=list, alias="amenityTags")
     # --- Карточка отеля ---
     hotel_name: Optional[str] = Field(default=None, alias="hotelName")
-    hotel_stars: Optional[int] = Field(default=None, alias="hotelStars")
     hotel_description: Optional[str] = Field(default=None, alias="hotelDescription")
     hotel_photos: List[str] = Field(default_factory=list, alias="hotelPhotos")
     hotel_amenities: Dict[str, List[str]] = Field(default_factory=dict, alias="hotelAmenities")
+    # --- Статус и продвижение ---
+    is_active: bool = Field(default=True, alias="isActive")
+    is_promoted: bool = Field(default=False, alias="isPromoted")
+    promoted_until: Optional[datetime] = Field(default=None, alias="promotedUntil")
+    promotion_tier: Optional[str] = Field(default=None, alias="promotionTier")
 
     model_config = {
         "populate_by_name": True,
         "from_attributes": True,
+    }
+
+
+class TourPromoteRequest(BaseModel):
+    days: int = Field(default=7, description="Срок продвижения в днях: 3, 7 или 30")
+    tier: str = Field(default="top", description="Тариф продвижения: boost, top, vip")
+    payment_method: str = Field(default="Kaspi Pay", alias="paymentMethod")
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class TourPromoteResponse(BaseModel):
+    tour_id: str = Field(alias="tourId")
+    title: str
+    is_promoted: bool = Field(alias="isPromoted")
+    promoted_until: datetime = Field(alias="promotedUntil")
+    promotion_tier: str = Field(alias="promotionTier")
+    amount_paid: int = Field(alias="amountPaid")
+    message: str
+
+    model_config = {
+        "populate_by_name": True,
     }
 
 

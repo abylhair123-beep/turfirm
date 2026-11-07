@@ -6,6 +6,8 @@ class AppUser {
     this.phone,
     required this.role,
     this.isActive = true,
+    this.isEmailVerified = false,
+    this.isPhoneVerified = false,
   });
 
   final String id;
@@ -14,9 +16,12 @@ class AppUser {
   final String? phone;
   final String role; // 'client', 'agency', 'admin'
   final bool isActive;
+  final bool isEmailVerified;
+  final bool isPhoneVerified;
 
   bool get isAgency => role == 'agency';
   bool get isAdmin => role == 'admin';
+  bool get isClient => role == 'client';
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
@@ -25,7 +30,9 @@ class AppUser {
       fullName: json['full_name'] as String? ?? json['fullName'] as String? ?? '',
       phone: json['phone'] as String?,
       role: json['role'] as String? ?? 'client',
-      isActive: json['is_active'] as bool? ?? true,
+      isActive: json['is_active'] as bool? ?? json['isActive'] as bool? ?? true,
+      isEmailVerified: json['is_email_verified'] as bool? ?? json['isEmailVerified'] as bool? ?? false,
+      isPhoneVerified: json['is_phone_verified'] as bool? ?? json['isPhoneVerified'] as bool? ?? false,
     );
   }
 
@@ -37,6 +44,8 @@ class AppUser {
       'phone': phone,
       'role': role,
       'is_active': isActive,
+      'is_email_verified': isEmailVerified,
+      'is_phone_verified': isPhoneVerified,
     };
   }
 }

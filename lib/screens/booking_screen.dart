@@ -30,17 +30,26 @@ class _BookingScreenState extends State<BookingScreen> {
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   final TextEditingController _promoController = TextEditingController();
-
   PromoResult? _promo;
   bool _promoChecking = false;
+
+  late final TextEditingController _referralController;
+  String? _appliedReferralCode;
+  String? _referralBloggerName;
+  double _referralDiscountPercent = 0.0;
+  bool _isCheckingReferral = false;
 
   static const _paymentMethods = ['Kaspi Pay', 'Карта', 'Halyk Bank'];
   static const _serviceFee = 9800;
 
   int get _tourTotal => widget.tour.priceFrom * _guests;
-  int get _total => _tourTotal + _serviceFee;
-  // Скидку считаем по проценту — чтобы она оставалась верной при смене числа гостей.
-  int get _discount => (_promo?.valid == true) ? (_total * _promo!.discountPercent / 100).round() : 0;
+  int get _total => _tourTotal + _serviceFee; // полная сумма без скидок (для отображения)
+  // Скидки считаем по проценту от стоимости тура (без сервисного сбора)
+  int get _referralDiscount =>
+      _referralDiscountPercent > 0 ? (_tourTotal * (_referralDiscountPercent / 100.0)).round() : 0;
+  int get _promoDiscount =>
+      (_promo?.valid == true) ? (_tourTotal * _promo!.discountPercent / 100).round() : 0;
+  int get _discount => _referralDiscount + _promoDiscount;
   int get _payable => _total - _discount;
 
   @override
@@ -50,6 +59,12 @@ class _BookingScreenState extends State<BookingScreen> {
     _nameController = TextEditingController(text: u?.fullName.isNotEmpty == true ? u!.fullName : 'Айгерим Сериковна');
     _phoneController = TextEditingController(text: u?.phone?.isNotEmpty == true ? u!.phone! : '+7 701 234 56 78');
     _emailController = TextEditingController(text: u?.email.isNotEmpty == true ? u!.email : 'aigerim@mail.kz');
+    _referralController = TextEditingController(text: ApiService.activeReferralCode ?? '');
+
+    // Если был активный код из сессии, автоматически проверим его
+    if (ApiService.activeReferralCode != null) {
+      _applyReferral(ApiService.activeReferralCode!);
+    }
   }
 
   @override
@@ -58,6 +73,7 @@ class _BookingScreenState extends State<BookingScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _promoController.dispose();
+    _referralController.dispose();
     super.dispose();
   }
 
@@ -82,6 +98,40 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() {
       _promo = null;
       _promoController.clear();
+    });
+  }
+
+  Future<void> _applyReferral(String code) async {
+    final clean = code.trim().toUpperCase();
+    if (clean.isEmpty) return;
+
+    setState(() => _isCheckingReferral = true);
+    final res = await ApiService.checkReferralCode(clean);
+    if (!mounted) return;
+
+    setState(() {
+      _isCheckingReferral = false;
+      if (res.valid) {
+        _appliedReferralCode = res.code;
+        _referralBloggerName = res.bloggerName;
+        _referralDiscountPercent = res.discountPercent;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ ${res.message}'),
+            backgroundColor: const Color(0xFF2E7D32),
+          ),
+        );
+      } else {
+        _appliedReferralCode = null;
+        _referralBloggerName = null;
+        _referralDiscountPercent = 0.0;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res.message),
+            backgroundColor: AppColors.coral,
+          ),
+        );
+      }
     });
   }
 
@@ -114,6 +164,7 @@ class _BookingScreenState extends State<BookingScreen> {
         customerEmail: _emailController.text.trim(),
         guestsCount: _guests,
         paymentMethod: method,
+        referralCode: _appliedReferralCode,
       );
 
       final result = await ApiService.createBooking(req);
@@ -329,6 +380,79 @@ class _BookingScreenState extends State<BookingScreen> {
                   const SizedBox(height: 8),
                   _buildPromoField(),
                   const SizedBox(height: 18),
+                  Text('Код или ссылка блогера', style: AppText.h4),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _appliedReferralCode != null ? const Color(0xFF2E7D32) : AppColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _referralController,
+                                textCapitalization: TextCapitalization.characters,
+                                decoration: InputDecoration(
+                                  hintText: 'Промокод блогера (напр. TRAVEL_KZ)',
+                                  prefixIcon: const Icon(Icons.discount_outlined, color: AppColors.teal, size: 20),
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: AppColors.surface,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: _isCheckingReferral
+                                  ? null
+                                  : () => _applyReferral(_referralController.text),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.teal,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              ),
+                              child: _isCheckingReferral
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  : const Text('Применить', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ],
+                        ),
+                        if (_appliedReferralCode != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Промокод $_appliedReferralCode активен (${_referralBloggerName ?? "Блогер"}) • Скидка ${_referralDiscountPercent.toInt()}%',
+                                    style: const TextStyle(color: Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   Text('Детализация стоимости', style: AppText.h4),
                   const SizedBox(height: 8),
                   Container(
@@ -341,16 +465,26 @@ class _BookingScreenState extends State<BookingScreen> {
                     child: Column(
                       children: [
                         _priceRow('Тур (${_fmt(tour.priceFrom)} × $_guests)', _fmt(_tourTotal)),
+                        if (_referralDiscount > 0) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Скидка от блогера (${_referralDiscountPercent.toInt()}%)', style: AppText.work(size: 13, color: const Color(0xFF2E7D32), weight: FontWeight.w600)),
+                              Text('- ${_fmt(_referralDiscount)}', style: AppText.work(size: 13, color: const Color(0xFF2E7D32), weight: FontWeight.w700)),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         _priceRow('Сервисный сбор платформы', _fmt(_serviceFee)),
-                        if (_discount > 0) ...[
+                        if (_promo?.valid == true && _promoDiscount > 0) ...[
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Промокод ${_promo!.code} (−${_promo!.discountPercent}%)',
                                   style: AppText.work(size: 13, color: const Color(0xFF2E7D32))),
-                              Text('−${_fmt(_discount)}',
+                              Text('−${_fmt(_promoDiscount)}',
                                   style: AppText.work(size: 13.5, weight: FontWeight.w600, color: const Color(0xFF2E7D32))),
                             ],
                           ),

@@ -21,6 +21,8 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
+    from app.core.cache import cache
+    cache.delete_pattern("sapar:cache:tours:*")
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     seed_data(db)
@@ -83,6 +85,38 @@ def test_filter_tours_by_category():
     assert len(tours) >= 1
     for t in tours:
         assert t["category"] == "Горы"
+
+
+def test_filter_tours_by_stars_and_meal_and_beach():
+    # 5 stars only
+    res5 = client.get("/api/v1/tours?hotelStars=5")
+    assert res5.status_code == 200
+    tours5 = res5.json()
+    assert len(tours5) >= 1
+    for t in tours5:
+        assert t["hotelStars"] >= 5
+
+    # Beach line 1
+    res_beach = client.get("/api/v1/tours?beachLine=1")
+    assert res_beach.status_code == 200
+    beach_tours = res_beach.json()
+    assert len(beach_tours) >= 1
+    for t in beach_tours:
+        assert t["beachLine"] <= 1
+
+    # Meal type AI
+    res_meal = client.get("/api/v1/tours?mealType=AI")
+    assert res_meal.status_code == 200
+    ai_tours = res_meal.json()
+    assert any("AI" in t["mealType"] or "вкл" in t["meal"].lower() for t in ai_tours)
+
+    # Duration filter
+    res_dur = client.get("/api/v1/tours?minDuration=6&maxDuration=8")
+    assert res_dur.status_code == 200
+    dur_tours = res_dur.json()
+    assert len(dur_tours) >= 1
+    for t in dur_tours:
+        assert 6 <= t["durationNights"] <= 8
 
 
 def test_get_tour_by_id():
@@ -464,6 +498,424 @@ def test_agency_b2b_dashboard():
         # Восстановление активности
         toggle_back = client.patch(f"/api/v1/tours/{first_tour_id}/toggle-active", headers=headers)
         assert toggle_back.status_code == 200
+
+
+def test_role_based_access_control():
+    """Тест четкого разграничения прав по ролям: клиент, агентство, админ."""
+    # 1. Логин клиента (Айгерим)
+    res_client = client.post("/api/v1/auth/login", json={"email": "aigerim@mail.kz", "password": "User123!"})
+    token_client = res_client.json()["access_token"]
+    headers_client = {"Authorization": f"Bearer {token_client}"}
+
+    # Клиент НЕ имеет доступа к кабинету агентства
+    res_forbidden = client.get("/api/v1/agencies/me/bookings", headers=headers_client)
+    assert res_forbidden.status_code == 403
+
+    # 2. Логин агентства (Turan Travel)
+    res_agency = client.post("/api/v1/auth/login", json={"email": "turan@sapar.kz", "password": "Agency123!"})
+    token_agency = res_agency.json()["access_token"]
+    headers_agency = {"Authorization": f"Bearer {token_agency}"}
+
+    # Агентство имеет доступ к своим заявкам
+    res_agency_bookings = client.get("/api/v1/agencies/me/bookings", headers=headers_agency)
+    assert res_agency_bookings.status_code == 200
+
+    # 3. Логин админа
+    res_admin = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    token_admin = res_admin.json()["access_token"]
+    headers_admin = {"Authorization": f"Bearer {token_admin}"}
+
+    # Админ имеет доступ ко всем бронированиям
+    res_admin_bookings = client.get("/api/v1/bookings", headers=headers_admin)
+    assert res_admin_bookings.status_code == 200
+
+
+def test_email_verification_and_password_recovery():
+    """Тест верификации email и сброса пароля."""
+    # Регистрация нового туриста
+    test_email = "newtourist@sapar.kz"
+    reg_res = client.post("/api/v1/auth/register", json={
+        "email": test_email,
+        "password": "Password123!",
+        "fullName": "Новый Турист",
+        "phone": "+7 777 555 44 33",
+        "role": "client",
+    })
+    assert reg_res.status_code == 201
+
+    # 1. Отправка кода верификации Email
+    send_res = client.post("/api/v1/auth/email/send-code", json={"email": test_email})
+    assert send_res.status_code == 200
+    code = send_res.json()["devCode"]
+
+    # 2. Подтверждение Email
+    verify_res = client.post("/api/v1/auth/email/verify-code", json={
+        "email": test_email,
+        "code": code,
+    })
+    assert verify_res.status_code == 200
+    assert verify_res.json()["isEmailVerified"] is True
+
+    # 3. Запрос восстановления пароля
+    forgot_res = client.post("/api/v1/auth/forgot-password", json={"identifier": test_email})
+    assert forgot_res.status_code == 200
+    reset_code = forgot_res.json()["devCode"]
+
+    # 4. Сброс пароля на новый
+    new_password = "BrandNewPassword2026!"
+    reset_res = client.post("/api/v1/auth/reset-password", json={
+        "identifier": test_email,
+        "code": reset_code,
+        "newPassword": new_password,
+    })
+    assert reset_res.status_code == 200
+    assert "access_token" in reset_res.json()
+
+    # 5. Проверка логина с новым паролем
+    relogin_res = client.post("/api/v1/auth/login", json={
+        "email": test_email,
+        "password": new_password,
+    })
+    assert relogin_res.status_code == 200
+    assert relogin_res.json()["email"] == test_email
+
+
+def test_referral_system_blogger_flow():
+    """Тест реферальной программы для блогеров:
+    - Автогенерация и кастомные ссылки/промокоды
+    - Трекинг кликов и проверка валидности промокода
+    - Оформление бронирования с реферальным кодом и начисление вознаграждения
+    - Сводная статистика блогера и заявка на вывод средств (Payout)
+    """
+    # 1. Регистрация и логин блогера
+    blogger_email = "blogger_travel@sapar.kz"
+    reg_res = client.post("/api/v1/auth/register", json={
+        "email": blogger_email,
+        "password": "BloggerPassword2026!",
+        "fullName": "Алихан Трэвел",
+        "phone": "+77081112233",
+        "role": "client",
+    })
+    assert reg_res.status_code == 201
+    blogger_token = reg_res.json()["access_token"]
+    blogger_headers = {"Authorization": f"Bearer {blogger_token}"}
+
+    # 2. Получение списка кампаний (должна автосоздаться первая ссылка)
+    me_res = client.get("/api/v1/referrals/me", headers=blogger_headers)
+    assert me_res.status_code == 200
+    campaigns = me_res.json()
+    assert len(campaigns) >= 1
+    initial_code = campaigns[0]["code"]
+    assert "https://sapar.kz/?ref=" in campaigns[0]["referralUrl"]
+
+    # 3. Создание кастомной кампании
+    custom_code = "ALIKHAN_INSTA"
+    create_res = client.post("/api/v1/referrals/campaigns", headers=blogger_headers, json={
+        "code": custom_code,
+        "campaignName": "Instagram Stories 2026",
+        "commissionRate": 3.0,
+    })
+    assert create_res.status_code == 201
+    created_data = create_res.json()
+    assert created_data["code"] == custom_code
+    assert created_data["campaignName"] == "Instagram Stories 2026"
+
+    # 4. Проверка публичного эндпоинта валидации промокода
+    check_ok = client.get(f"/api/v1/referrals/check/{custom_code}")
+    assert check_ok.status_code == 200
+    assert check_ok.json()["valid"] is True
+    assert check_ok.json()["bloggerName"] == "Алихан Трэвел"
+
+    check_fail = client.get("/api/v1/referrals/check/FAKE_CODE_999")
+    assert check_fail.status_code == 200
+    assert check_fail.json()["valid"] is False
+
+    # 5. Трекинг перехода по ссылке (клик)
+    click_res = client.post("/api/v1/referrals/click", json={
+        "code": custom_code,
+        "tourId": "tour-charyn-1",
+        "referrerUrl": "https://instagram.com",
+    })
+    assert click_res.status_code == 200
+    assert click_res.json()["clicksCount"] >= 1
+
+    # 6. Оформление бронирования тура с реферальным кодом
+    # Сначала получим активный тур
+    tours_res = client.get("/api/v1/tours")
+    tour = tours_res.json()[0]
+    tour_price = tour["priceFrom"]
+
+    booking_res = client.post("/api/v1/bookings", json={
+        "tourId": tour["id"],
+        "customerName": "Серик Подписчик",
+        "customerPhone": "+77079998877",
+        "customerEmail": "subscriber@gmail.com",
+        "guestsCount": 2,
+        "paymentMethod": "Kaspi Pay",
+        "referralCode": custom_code,
+    })
+    assert booking_res.status_code == 201
+    booking_data = booking_res.json()
+    assert booking_data["referralCode"] == custom_code
+    expected_reward = int((tour_price * 2) * 0.03)
+    assert booking_data["referralReward"] == expected_reward
+
+    # 7. Проверка обновленной статистики блогера
+    stats_res = client.get("/api/v1/referrals/stats", headers=blogger_headers)
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert stats["totalClicks"] >= 1
+    assert stats["totalBookings"] >= 1
+    assert stats["totalEarned"] >= expected_reward
+    assert stats["balance"] >= expected_reward
+    assert stats["conversionRate"] > 0
+    assert len(stats["recentBookings"]) >= 1
+    assert stats["recentBookings"][0]["customerName"] == "Серик Подписчик"
+
+    # 8. Запрос на вывод средств блогером
+    payout_res = client.post("/api/v1/referrals/payout", headers=blogger_headers, json={
+        "amount": 1000,
+        "paymentDetails": "Kaspi Gold +7 708 111 22 33",
+    })
+    assert payout_res.status_code == 200
+    payout_data = payout_res.json()
+    assert payout_data["status"] == "pending"
+    assert payout_data["remainingBalance"] == stats["balance"] - 1000
+
+
+def test_admin_financial_balance_and_records():
+    """Тест финансового баланса и админ-панели:
+    - Защита доступа (только admin)
+    - Сводка приходов, расходов, чистой прибыли
+    - Внесение рекламных поступлений и операционных затрат
+    - Детализация по категориям и динамика
+    """
+    # 1. Попытка неавторизованного доступа и доступа клиентом
+    unauth = client.get("/api/v1/admin/finances/summary")
+    assert unauth.status_code == 401
+
+    client_login = client.post("/api/v1/auth/login", json={
+        "email": "aigerim@mail.kz",
+        "password": "User123!",
+    })
+    client_token = client_login.json()["access_token"]
+    forbidden = client.get("/api/v1/admin/finances/summary", headers={"Authorization": f"Bearer {client_token}"})
+    assert forbidden.status_code == 403
+
+    # 2. Логин администратора
+    admin_login = client.post("/api/v1/auth/login", json={
+        "email": "admin@sapar.kz",
+        "password": "Admin123!",
+    })
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 3. Получение сводного отчёта
+    summary_res = client.get("/api/v1/admin/finances/summary?period=all", headers=admin_headers)
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+    assert "totalIncome" in summary
+    assert "totalExpense" in summary
+    assert "netProfit" in summary
+    assert summary["netProfit"] == summary["totalIncome"] - summary["totalExpense"]
+    assert "incomeBreakdown" in summary
+    assert "expenseBreakdown" in summary
+    assert "chartPoints" in summary
+    assert "recentTransactions" in summary
+
+    # 4. Добавление записи дохода от рекламы
+    initial_income = summary["totalIncome"]
+    ad_res = client.post("/api/v1/admin/finances/records", headers=admin_headers, json={
+        "type": "income",
+        "category": "advertising",
+        "amount": 250000,
+        "title": "Спонсорский баннер: Отель Rixos Borovoe",
+        "description": "Рекламный блок на главном экране",
+        "referenceId": "AD-BOROVOE-01",
+    })
+    assert ad_res.status_code == 201
+    assert ad_res.json()["amount"] == 250000
+
+    # 5. Проверка обновления сводки после внесения дохода
+    updated_summary = client.get("/api/v1/admin/finances/summary", headers=admin_headers).json()
+    assert updated_summary["totalIncome"] == initial_income + 250000
+
+
+def test_tour_promotion_ranking_and_accounting():
+    """Тест системы рекламы туров:
+    - Покупка продвижения тура агентством
+    - Флаг isPromoted и ранжирование выше обычных туров
+    - Фиксация оплаты рекламы в финансовом отчёте
+    - Отключение продвижения
+    """
+    # 1. Логин турагентства Turan Travel
+    agency_login = client.post("/api/v1/auth/login", json={
+        "email": "turan@sapar.kz",
+        "password": "Agency123!",
+    })
+    assert agency_login.status_code == 200
+    agency_token = agency_login.json()["access_token"]
+    agency_headers = {"Authorization": f"Bearer {agency_token}"}
+
+    # Получаем тур агентства
+    tours_res = client.get("/api/v1/tours?agencyId=agn-turan-travel")
+    assert tours_res.status_code == 200
+    tours = tours_res.json()
+    assert len(tours) > 0
+    target_tour = tours[-1]  # берём тур, который изначально не в самом топе
+    tour_id = target_tour["id"]
+
+    # 2. Покупка рекламного тарифа «Тур недели» (7 дней, 29 000 ₸)
+    promote_res = client.post(f"/api/v1/tours/{tour_id}/promote", headers=agency_headers, json={
+        "days": 7,
+        "tier": "top",
+        "paymentMethod": "Kaspi Pay",
+    })
+    assert promote_res.status_code == 200
+    promote_data = promote_res.json()
+    assert promote_data["isPromoted"] is True
+    assert promote_data["promotionTier"] == "top"
+    assert promote_data["amountPaid"] == 29000
+
+    # 3. Проверка ранжирования: проплаченный тур поднимается на 1-е место в выдаче
+    all_tours_res = client.get("/api/v1/tours")
+    assert all_tours_res.status_code == 200
+    all_tours = all_tours_res.json()
+    assert all_tours[0]["id"] == tour_id
+    assert all_tours[0]["isPromoted"] is True
+
+    # 4. Проверка финансового отчёта админа: сумма 29 000 ₸ учтена в доходах от рекламы
+    admin_login = client.post("/api/v1/auth/login", json={
+        "email": "admin@sapar.kz",
+        "password": "Admin123!",
+    })
+    admin_token = admin_login.json()["access_token"]
+    finances = client.get("/api/v1/admin/finances/summary", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    ad_item = next((item for item in finances["incomeBreakdown"] if item["category"] == "advertising"), None)
+    assert ad_item is not None
+    assert ad_item["amount"] >= 29000
+
+    # 5. Отмена/завершение продвижения
+    cancel_res = client.delete(f"/api/v1/tours/{tour_id}/promote", headers=agency_headers)
+    assert cancel_res.status_code == 204
+
+    # Проверка, что флаг сбросился
+    check_tour = client.get(f"/api/v1/tours/{tour_id}").json()
+    assert check_tour["isPromoted"] is False
+
+
+def test_crm_call_center_and_voip_system():
+    """Тест системы обзвона клиентов и турфирм (мини-CRM + IP-телефония)."""
+    # 1. Авторизация менеджера агентства (Turan Travel)
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "turan@sapar.kz",
+        "password": "Agency123!",
+    })
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Получение умной очереди обзвона
+    queue_res = client.get("/api/v1/crm/calls/queue", headers=headers)
+    assert queue_res.status_code == 200
+    queue = queue_res.json()
+    assert len(queue) >= 1
+    first_item = queue[0]
+    assert "target_name" in first_item
+    assert "target_phone" in first_item
+    assert "priority" in first_item
+
+    # 3. Фиксация ручного звонка менеджером (клиент подтвердил тур, но попросил перезвонить)
+    call_payload = {
+        "target_type": "customer",
+        "target_name": "Бауржан Момышев",
+        "target_phone": "+7 705 123 45 67",
+        "direction": "outbound",
+        "status": "callback_needed",
+        "duration_seconds": 65,
+        "notes": "Уточняет даты отпуска с супругой. Просил перезвонить завтра утром.",
+        "telephony_provider": "manual",
+    }
+    create_res = client.post("/api/v1/crm/calls/logs", json=call_payload, headers=headers)
+    assert create_res.status_code == 201
+    call_log = create_res.json()
+    call_id = call_log["id"]
+    assert call_log["target_name"] == "Бауржан Момышев"
+    assert call_log["status"] == "callback_needed"
+    assert call_log["manager_name"] is not None
+
+    # 4. Обновление статуса звонка после повторного разговора
+    patch_res = client.patch(
+        f"/api/v1/crm/calls/logs/{call_id}",
+        json={
+            "status": "successful",
+            "notes": "Перезвонили. Клиент подтвердил тур и внёс оплату.",
+            "duration_seconds": 140,
+        },
+        headers=headers,
+    )
+    assert patch_res.status_code == 200
+    patched_call = patch_res.json()
+    assert patched_call["status"] == "successful"
+    assert patched_call["duration_seconds"] == 140
+
+    # 5. Проверка истории звонков с фильтрацией
+    logs_res = client.get("/api/v1/crm/calls/logs?status=successful", headers=headers)
+    assert logs_res.status_code == 200
+    logs = logs_res.json()
+    assert any(log["id"] == call_id for log in logs)
+
+    # 6. Проверка аналитики обзвона (статистика, % дозвона, средняя длительность)
+    stats_res = client.get("/api/v1/crm/calls/stats", headers=headers)
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert stats["total_calls"] >= 1
+    assert stats["successful_calls"] >= 1
+    assert "answer_rate_pct" in stats
+    assert "status_breakdown" in stats
+
+    # 7. Тестовая симуляция автообзвона через IP-телефонию (click-to-call)
+    sim_res = client.post(
+        "/api/v1/crm/calls/simulate-voip",
+        json={
+            "target_phone": "+7 701 999 88 77",
+            "target_name": "Кайрат Нуртас",
+            "target_type": "customer",
+            "simulated_outcome": "successful",
+            "notes": "Автообзвон SIP: подтверждение трансфера в аэропорт.",
+        },
+        headers=headers,
+    )
+    assert sim_res.status_code == 200
+    sim_call = sim_res.json()
+    assert sim_call["telephony_provider"] == "voip_simulator"
+    assert sim_call["recording_url"] is not None
+    assert sim_call["duration_seconds"] > 0
+
+    # 8. Приём вебхука от внешней IP-АТС (Mango / Zadarma / Asterisk)
+    webhook_res = client.post(
+        "/api/v1/crm/calls/webhook",
+        json={
+            "event": "call_ended",
+            "external_call_id": "EXT-PBX-998822",
+            "caller_phone": "+7 727 300 11 22",
+            "callee_phone": "+7 777 555 12 34",
+            "direction": "outbound",
+            "status": "successful",
+            "duration_seconds": 185,
+            "recording_url": "https://storage.sapar.travel/recordings/ext-998822.mp3",
+            "provider": "mango_telecom",
+        },
+    )
+    assert webhook_res.status_code == 200
+    webhook_data = webhook_res.json()
+    assert webhook_data["status"] == "created"
+    assert "call_id" in webhook_data
+
+
+
+
 
 
 

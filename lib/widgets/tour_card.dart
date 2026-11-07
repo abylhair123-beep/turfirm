@@ -23,6 +23,7 @@ class TourCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPromoted = tour.isPromoted;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
@@ -31,7 +32,10 @@ class TourCard extends StatelessWidget {
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+              color: isPromoted ? const Color(0xFFF59E0B) : AppColors.border,
+              width: isPromoted ? 1.6 : 1,
+            ),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -50,10 +54,49 @@ class TourCard extends StatelessWidget {
                     Positioned(
                       top: 12,
                       left: 12,
-                      child: _pill(
-                        tour.agency,
-                        Colors.white.withValues(alpha: 0.9),
-                        AppColors.ink,
+                      child: Row(
+                        children: [
+                          if (isPromoted) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              margin: const EdgeInsets.only(right: 6),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Реклама',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          _pill(
+                            tour.agency,
+                            Colors.white.withValues(alpha: 0.9),
+                            AppColors.ink,
+                          ),
+                        ],
                       ),
                     ),
                     // Горящий таймер под бейджем агентства
@@ -148,6 +191,18 @@ class TourCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(tour.meta, style: AppText.caption),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _attrTag('${tour.hotelStars}★', const Color(0xFFFFF8E1), const Color(0xFFF57F17)),
+                        _attrTag(tour.mealType.isNotEmpty ? tour.mealType : tour.meal, const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
+                        if (tour.beachLine > 0)
+                          _attrTag('${tour.beachLine}-я линия', const Color(0xFFE1F5FE), const Color(0xFF0288D1)),
+                        _attrTag('${tour.durationNights} ночей', const Color(0xFFF3E5F5), const Color(0xFF7B1FA2)),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -231,6 +286,20 @@ class TourCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Text(text, style: AppText.work(size: 11.5, weight: FontWeight.w600, color: fg)),
+    );
+  }
+
+  Widget _attrTag(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: fg),
+      ),
     );
   }
 }

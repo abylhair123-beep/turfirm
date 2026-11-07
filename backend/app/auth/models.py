@@ -16,6 +16,8 @@ class User(Base):
     phone = Column(String(50), nullable=True)
     role = Column(String(30), default="client", nullable=False)  # "client", "agency", "admin"
     is_active = Column(Boolean, default=True, nullable=False)
+    is_email_verified = Column(Boolean, default=False, nullable=False)
+    is_phone_verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -24,3 +26,4 @@ class User(Base):
     reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user")
     favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
+    referral_campaigns = relationship("ReferralPartner", back_populates="user", cascade="all, delete-orphan")

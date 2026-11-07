@@ -498,4 +498,85 @@ def test_agency_b2b_dashboard():
         assert toggle_back.status_code == 200
 
 
+def test_role_based_access_control():
+    """Тест четкого разграничения прав по ролям: клиент, агентство, админ."""
+    # 1. Логин клиента (Айгерим)
+    res_client = client.post("/api/v1/auth/login", json={"email": "aigerim@mail.kz", "password": "User123!"})
+    token_client = res_client.json()["access_token"]
+    headers_client = {"Authorization": f"Bearer {token_client}"}
+
+    # Клиент НЕ имеет доступа к кабинету агентства
+    res_forbidden = client.get("/api/v1/agencies/me/bookings", headers=headers_client)
+    assert res_forbidden.status_code == 403
+
+    # 2. Логин агентства (Turan Travel)
+    res_agency = client.post("/api/v1/auth/login", json={"email": "turan@sapar.kz", "password": "Agency123!"})
+    token_agency = res_agency.json()["access_token"]
+    headers_agency = {"Authorization": f"Bearer {token_agency}"}
+
+    # Агентство имеет доступ к своим заявкам
+    res_agency_bookings = client.get("/api/v1/agencies/me/bookings", headers=headers_agency)
+    assert res_agency_bookings.status_code == 200
+
+    # 3. Логин админа
+    res_admin = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    token_admin = res_admin.json()["access_token"]
+    headers_admin = {"Authorization": f"Bearer {token_admin}"}
+
+    # Админ имеет доступ ко всем бронированиям
+    res_admin_bookings = client.get("/api/v1/bookings", headers=headers_admin)
+    assert res_admin_bookings.status_code == 200
+
+
+def test_email_verification_and_password_recovery():
+    """Тест верификации email и сброса пароля."""
+    # Регистрация нового туриста
+    test_email = "newtourist@sapar.kz"
+    reg_res = client.post("/api/v1/auth/register", json={
+        "email": test_email,
+        "password": "Password123!",
+        "fullName": "Новый Турист",
+        "phone": "+7 777 555 44 33",
+        "role": "client",
+    })
+    assert reg_res.status_code == 201
+
+    # 1. Отправка кода верификации Email
+    send_res = client.post("/api/v1/auth/email/send-code", json={"email": test_email})
+    assert send_res.status_code == 200
+    code = send_res.json()["devCode"]
+
+    # 2. Подтверждение Email
+    verify_res = client.post("/api/v1/auth/email/verify-code", json={
+        "email": test_email,
+        "code": code,
+    })
+    assert verify_res.status_code == 200
+    assert verify_res.json()["isEmailVerified"] is True
+
+    # 3. Запрос восстановления пароля
+    forgot_res = client.post("/api/v1/auth/forgot-password", json={"identifier": test_email})
+    assert forgot_res.status_code == 200
+    reset_code = forgot_res.json()["devCode"]
+
+    # 4. Сброс пароля на новый
+    new_password = "BrandNewPassword2026!"
+    reset_res = client.post("/api/v1/auth/reset-password", json={
+        "identifier": test_email,
+        "code": reset_code,
+        "newPassword": new_password,
+    })
+    assert reset_res.status_code == 200
+    assert "access_token" in reset_res.json()
+
+    # 5. Проверка логина с новым паролем
+    relogin_res = client.post("/api/v1/auth/login", json={
+        "email": test_email,
+        "password": new_password,
+    })
+    assert relogin_res.status_code == 200
+    assert relogin_res.json()["email"] == test_email
+
+
+
 

@@ -210,20 +210,61 @@ class _AuthenticatedView extends StatelessWidget {
                     Text(user.fullName, style: AppText.sora(size: 16, weight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(user.email, style: AppText.work(size: 13, color: AppColors.muted)),
-                    if (user.isAgency == true) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.coral.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: user.isAdmin == true
+                                ? const Color(0xFF7B1FA2).withValues(alpha: 0.12)
+                                : user.isAgency == true
+                                    ? AppColors.coral.withValues(alpha: 0.12)
+                                    : AppColors.teal.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            user.isAdmin == true
+                                ? 'Администратор'
+                                : user.isAgency == true
+                                    ? 'Турагентство'
+                                    : 'Турист',
+                            style: AppText.work(
+                              size: 11,
+                              weight: FontWeight.bold,
+                              color: user.isAdmin == true
+                                  ? const Color(0xFF7B1FA2)
+                                  : user.isAgency == true
+                                      ? AppColors.coral
+                                      : AppColors.teal,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          'Турагентство',
-                          style: AppText.work(size: 11, weight: FontWeight.bold, color: AppColors.coral),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: user.isEmailVerified == true
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFFF3E0),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            user.isEmailVerified == true
+                                ? '✓ Email подтвержден'
+                                : '⚠ Email не подтвержден',
+                            style: AppText.work(
+                              size: 11,
+                              weight: FontWeight.w600,
+                              color: user.isEmailVerified == true
+                                  ? const Color(0xFF2E7D32)
+                                  : const Color(0xFFE65100),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -232,8 +273,8 @@ class _AuthenticatedView extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Панель B2B
-        if (user.isAgency == true) ...[
+        // Панель B2B и управления
+        if (user.isAgency == true || user.isAdmin == true) ...[
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

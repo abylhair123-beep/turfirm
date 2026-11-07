@@ -135,6 +135,8 @@ class ApiService {
           email: data['email'] as String? ?? email,
           fullName: data['full_name'] as String? ?? 'Пользователь',
           role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? data['is_phone_verified'] as bool? ?? false,
         );
         userNotifier.value = _currentUser;
 
@@ -186,6 +188,8 @@ class ApiService {
           fullName: data['full_name'] as String? ?? fullName,
           phone: phone,
           role: data['role'] as String? ?? role,
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? data['is_phone_verified'] as bool? ?? false,
         );
         userNotifier.value = _currentUser;
 
@@ -292,6 +296,8 @@ class ApiService {
           fullName: data['full_name'] as String? ?? 'Турист',
           phone: phone,
           role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? data['is_email_verified'] as bool? ?? false,
+          isPhoneVerified: true,
         );
         userNotifier.value = _currentUser;
 
@@ -304,6 +310,135 @@ class ApiService {
       debugPrint('[ApiService] verifySmsOtp error: $e');
     }
     return null;
+  }
+
+  /// Запрос восстановления пароля (по Email или SMS)
+  static Future<Map<String, dynamic>> forgotPassword(String identifier) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/forgot-password');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'identifier': identifier.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Код сброса отправлен',
+          'channel': data['channel'] ?? 'email',
+          'devCode': data['devCode'],
+        };
+      }
+      return {'success': false, 'message': data['detail'] ?? 'Ошибка запроса сброса'};
+    } catch (e) {
+      return {'success': false, 'message': 'Сетевая ошибка: $e'};
+    }
+  }
+
+  /// Сброс пароля с новым кодом
+  static Future<AppUser?> resetPassword({
+    required String identifier,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/reset-password');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({
+              'identifier': identifier.trim(),
+              'code': code.trim(),
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        _token = data['access_token'] as String?;
+        _currentUser = AppUser(
+          id: data['user_id'] as String? ?? '',
+          email: data['email'] as String? ?? identifier,
+          fullName: data['full_name'] as String? ?? 'Пользователь',
+          role: data['role'] as String? ?? 'client',
+          isEmailVerified: data['isEmailVerified'] as bool? ?? false,
+          isPhoneVerified: data['isPhoneVerified'] as bool? ?? false,
+        );
+        userNotifier.value = _currentUser;
+
+        final prefs = await SharedPreferences.getInstance();
+        if (_token != null) await prefs.setString('auth_token', _token!);
+        await prefs.setString('auth_user', jsonEncode(_currentUser!.toJson()));
+        return _currentUser;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] resetPassword error: $e');
+    }
+    return null;
+  }
+
+  /// Отправка кода подтверждения Email
+  static Future<Map<String, dynamic>> sendEmailVerificationCode(String email) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/email/send-code');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'email': email.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': data['message'], 'devCode': data['devCode']};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'Ошибка отправки кода'};
+    } catch (e) {
+      return {'success': false, 'message': 'Сетевая ошибка: $e'};
+    }
+  }
+
+  /// Проверка кода подтверждения Email
+  static Future<bool> verifyEmailCode(String email, String code) async {
+    try {
+      final uri = Uri.parse('$baseUrl/auth/email/verify-code');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(withAuth: false),
+            body: jsonEncode({'email': email.trim(), 'code': code.trim()}),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        if (_currentUser != null && _currentUser!.email.toLowerCase() == email.toLowerCase().trim()) {
+          _currentUser = AppUser(
+            id: _currentUser!.id,
+            email: _currentUser!.email,
+            fullName: _currentUser!.fullName,
+            phone: _currentUser!.phone,
+            role: _currentUser!.role,
+            isActive: _currentUser!.isActive,
+            isEmailVerified: true,
+            isPhoneVerified: _currentUser!.isPhoneVerified,
+          );
+          userNotifier.value = _currentUser;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('auth_user', jsonEncode(_currentUser!.toJson()));
+        }
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] verifyEmailCode error: $e');
+    }
+    return false;
   }
 
   /// Получить URL для открытия или скачивания официального PDF-ваучера

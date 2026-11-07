@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import logging
 from sqlalchemy.orm import Session
 
@@ -5,6 +6,7 @@ from app.agencies.models import Agency
 from app.auth.models import User
 from app.bookings.models import Booking
 from app.core.security import get_password_hash
+from app.crm.models import CallLog
 from app.database import Base, SessionLocal, engine
 from app.favorites.models import Favorite
 from app.payments.models import Payment
@@ -395,6 +397,89 @@ def seed_referrals(db: Session) -> None:
     )
     db.add_all([partner1, partner2])
     db.commit()
+    seed_crm_calls(db)
+
+
+def seed_crm_calls(db: Session) -> None:
+    """Сидирование логов обзвона и очереди мини-CRM."""
+    if db.query(CallLog).first():
+        return
+
+    admin_user = db.query(User).filter(User.role == "admin").first()
+    manager_id = admin_user.id if admin_user else None
+
+    booking = db.query(Booking).first()
+    agency = db.query(Agency).first()
+
+    now = datetime.now(timezone.utc)
+
+    calls = [
+        CallLog(
+            id="CALL-0001",
+            direction="outbound",
+            target_type="customer",
+            target_name=booking.customer_name if booking else "Айгерим Касымова",
+            target_phone=booking.customer_phone if booking else "+7 701 555 12 34",
+            booking_id=booking.id if booking else None,
+            user_id=booking.user_id if booking else None,
+            agency_id=booking.agency_id if booking else None,
+            manager_id=manager_id,
+            status="successful",
+            duration_seconds=138,
+            notes="Подтвердили даты вылета и визовые анкеты. Клиентка попросила отель с детским клубом.",
+            telephony_provider="mango",
+            recording_url="https://storage.sapar.travel/recordings/call-0001.mp3",
+            external_call_id="MANGO-90812",
+            created_at=now - timedelta(hours=3),
+        ),
+        CallLog(
+            id="CALL-0002",
+            direction="outbound",
+            target_type="customer",
+            target_name="Арман Жумабеков",
+            target_phone="+7 777 444 88 99",
+            booking_id=booking.id if booking else None,
+            manager_id=manager_id,
+            status="callback_needed",
+            duration_seconds=42,
+            notes="На совещании. Попросил перезвонить в 18:30 для согласования медицинского страхования.",
+            scheduled_callback_at=now + timedelta(hours=2),
+            telephony_provider="manual",
+            created_at=now - timedelta(hours=1),
+        ),
+        CallLog(
+            id="CALL-0003",
+            direction="outbound",
+            target_type="agency",
+            target_name=agency.name if agency else "Sapar Travel Almaty",
+            target_phone=agency.phone if agency and agency.phone else "+7 727 300 11 22",
+            agency_id=agency.id if agency else None,
+            manager_id=manager_id,
+            status="successful",
+            duration_seconds=210,
+            notes="Согласовали блок мест на чартер в Шарм-эль-Шейх и агентскую комиссию 12%.",
+            telephony_provider="zadarma",
+            recording_url="https://storage.sapar.travel/recordings/call-0003.mp3",
+            external_call_id="ZADARMA-44102",
+            created_at=now - timedelta(minutes=40),
+        ),
+        CallLog(
+            id="CALL-0004",
+            direction="outbound",
+            target_type="customer",
+            target_name="Динара Серикова",
+            target_phone="+7 702 333 77 11",
+            manager_id=manager_id,
+            status="no_answer",
+            duration_seconds=0,
+            notes="Гудки идут, трубку не взяли. Поставлена задача на повторный звонок через час.",
+            telephony_provider="simulator",
+            created_at=now - timedelta(minutes=15),
+        ),
+    ]
+    db.add_all(calls)
+    db.commit()
+    logger.info("Successfully seeded CRM call logs!")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ from app.bookings.router import router as bookings_router
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.crm.router import router as crm_router
 from app.database import Base, SessionLocal, engine
 from app.favorites.router import router as favorites_router
 from app.notifications.router import router as notifications_router
@@ -103,6 +104,7 @@ app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
 app.include_router(referrals_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix)
+app.include_router(crm_router, prefix=settings.api_v1_prefix)
 
 # Раздача локально загруженных медиа-файлов по /uploads/...
 os.makedirs(settings.upload_dir, exist_ok=True)

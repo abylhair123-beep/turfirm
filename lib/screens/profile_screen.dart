@@ -12,6 +12,7 @@ import 'agency_dashboard_screen.dart';
 import 'auth_screen.dart';
 import 'bookings_list_screen.dart';
 import 'create_tour_screen.dart';
+import 'crm_calls_screen.dart';
 import 'favorites_screen.dart';
 import 'partner_dashboard_screen.dart';
 
@@ -1089,6 +1090,31 @@ class _AuthenticatedView extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CrmCallsScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.headset_mic_rounded, color: Colors.white, size: 18),
+                    label: const Text(
+                      'Мини-CRM & Обзвон клиентов',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.22),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.white54),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                  ),
                 ),
               ],
             ),

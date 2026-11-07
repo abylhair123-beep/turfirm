@@ -21,6 +21,8 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
+    from app.core.cache import cache
+    cache.delete_pattern("sapar:cache:tours:*")
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     seed_data(db)
@@ -801,6 +803,115 @@ def test_tour_promotion_ranking_and_accounting():
     # Проверка, что флаг сбросился
     check_tour = client.get(f"/api/v1/tours/{tour_id}").json()
     assert check_tour["isPromoted"] is False
+
+
+def test_crm_call_center_and_voip_system():
+    """Тест системы обзвона клиентов и турфирм (мини-CRM + IP-телефония)."""
+    # 1. Авторизация менеджера агентства (Turan Travel)
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "turan@sapar.kz",
+        "password": "Agency123!",
+    })
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Получение умной очереди обзвона
+    queue_res = client.get("/api/v1/crm/calls/queue", headers=headers)
+    assert queue_res.status_code == 200
+    queue = queue_res.json()
+    assert len(queue) >= 1
+    first_item = queue[0]
+    assert "target_name" in first_item
+    assert "target_phone" in first_item
+    assert "priority" in first_item
+
+    # 3. Фиксация ручного звонка менеджером (клиент подтвердил тур, но попросил перезвонить)
+    call_payload = {
+        "target_type": "customer",
+        "target_name": "Бауржан Момышев",
+        "target_phone": "+7 705 123 45 67",
+        "direction": "outbound",
+        "status": "callback_needed",
+        "duration_seconds": 65,
+        "notes": "Уточняет даты отпуска с супругой. Просил перезвонить завтра утром.",
+        "telephony_provider": "manual",
+    }
+    create_res = client.post("/api/v1/crm/calls/logs", json=call_payload, headers=headers)
+    assert create_res.status_code == 201
+    call_log = create_res.json()
+    call_id = call_log["id"]
+    assert call_log["target_name"] == "Бауржан Момышев"
+    assert call_log["status"] == "callback_needed"
+    assert call_log["manager_name"] is not None
+
+    # 4. Обновление статуса звонка после повторного разговора
+    patch_res = client.patch(
+        f"/api/v1/crm/calls/logs/{call_id}",
+        json={
+            "status": "successful",
+            "notes": "Перезвонили. Клиент подтвердил тур и внёс оплату.",
+            "duration_seconds": 140,
+        },
+        headers=headers,
+    )
+    assert patch_res.status_code == 200
+    patched_call = patch_res.json()
+    assert patched_call["status"] == "successful"
+    assert patched_call["duration_seconds"] == 140
+
+    # 5. Проверка истории звонков с фильтрацией
+    logs_res = client.get("/api/v1/crm/calls/logs?status=successful", headers=headers)
+    assert logs_res.status_code == 200
+    logs = logs_res.json()
+    assert any(log["id"] == call_id for log in logs)
+
+    # 6. Проверка аналитики обзвона (статистика, % дозвона, средняя длительность)
+    stats_res = client.get("/api/v1/crm/calls/stats", headers=headers)
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert stats["total_calls"] >= 1
+    assert stats["successful_calls"] >= 1
+    assert "answer_rate_pct" in stats
+    assert "status_breakdown" in stats
+
+    # 7. Тестовая симуляция автообзвона через IP-телефонию (click-to-call)
+    sim_res = client.post(
+        "/api/v1/crm/calls/simulate-voip",
+        json={
+            "target_phone": "+7 701 999 88 77",
+            "target_name": "Кайрат Нуртас",
+            "target_type": "customer",
+            "simulated_outcome": "successful",
+            "notes": "Автообзвон SIP: подтверждение трансфера в аэропорт.",
+        },
+        headers=headers,
+    )
+    assert sim_res.status_code == 200
+    sim_call = sim_res.json()
+    assert sim_call["telephony_provider"] == "voip_simulator"
+    assert sim_call["recording_url"] is not None
+    assert sim_call["duration_seconds"] > 0
+
+    # 8. Приём вебхука от внешней IP-АТС (Mango / Zadarma / Asterisk)
+    webhook_res = client.post(
+        "/api/v1/crm/calls/webhook",
+        json={
+            "event": "call_ended",
+            "external_call_id": "EXT-PBX-998822",
+            "caller_phone": "+7 727 300 11 22",
+            "callee_phone": "+7 777 555 12 34",
+            "direction": "outbound",
+            "status": "successful",
+            "duration_seconds": 185,
+            "recording_url": "https://storage.sapar.travel/recordings/ext-998822.mp3",
+            "provider": "mango_telecom",
+        },
+    )
+    assert webhook_res.status_code == 200
+    webhook_data = webhook_res.json()
+    assert webhook_data["status"] == "created"
+    assert "call_id" in webhook_data
 
 
 

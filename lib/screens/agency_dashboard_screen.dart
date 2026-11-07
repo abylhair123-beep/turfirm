@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'create_tour_screen.dart';
+import 'crm_calls_screen.dart';
 
 class AgencyDashboardScreen extends StatefulWidget {
   const AgencyDashboardScreen({super.key});
@@ -215,6 +216,17 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> with Sing
         title: Text('Кабинет турагентства (B2B)', style: AppText.sora(size: 18, weight: FontWeight.w700)),
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.headset_mic_rounded, color: AppColors.teal),
+            tooltip: 'Мини-CRM & Обзвон',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CrmCallsScreen()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.teal,

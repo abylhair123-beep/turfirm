@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
+import '../models/crm_models.dart';
 import '../models/financial_summary.dart';
 import '../models/referral.dart';
 import '../models/review.dart';
@@ -1314,5 +1315,179 @@ class ApiService {
       debugPrint('[ApiService] cancelTourPromotion error: $e');
       return false;
     }
+  }
+
+  // ==================== МИНИ-CRM И ОБЗВОН (КЛИЕНТЫ И ТУРФИРМЫ) ====================
+
+  /// Получение умной очереди обзвона (новые брони, перезвоны, турфирмы)
+  static Future<List<CallQueueItem>> getCallQueue({
+    String targetType = 'all',
+    String? search,
+  }) async {
+    try {
+      final queryParams = <String, String>{'target_type': targetType};
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+      final uri = Uri.parse('$baseUrl/crm/calls/queue').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => CallQueueItem.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallQueue error: $e');
+    }
+    return [];
+  }
+
+  /// Получение истории и логов звонков с фильтрацией
+  static Future<List<CallLogItem>> getCallLogs({
+    String? status,
+    String? targetType,
+    String? search,
+    int limit = 50,
+  }) async {
+    try {
+      final queryParams = <String, String>{'limit': limit.toString()};
+      if (status != null && status != 'all') queryParams['status'] = status;
+      if (targetType != null && targetType != 'all') queryParams['target_type'] = targetType;
+      if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+      final uri = Uri.parse('$baseUrl/crm/calls/logs').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => CallLogItem.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallLogs error: $e');
+    }
+    return [];
+  }
+
+  /// Получение аналитики и сводной статистики обзвона
+  static Future<CallStats?> getCallStats() async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/stats');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallStats.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getCallStats error: $e');
+    }
+    return null;
+  }
+
+  /// Фиксация звонка менеджером (ручной ввод или click-to-call)
+  static Future<CallLogItem?> createCallLog({
+    required String targetType,
+    required String targetName,
+    required String targetPhone,
+    String direction = 'outbound',
+    String? bookingId,
+    String? agencyId,
+    required String status,
+    int durationSeconds = 0,
+    String? notes,
+    DateTime? scheduledCallbackAt,
+    String telephonyProvider = 'manual',
+    String? recordingUrl,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/logs');
+      final body = <String, dynamic>{
+        'target_type': targetType,
+        'target_name': targetName,
+        'target_phone': targetPhone,
+        'direction': direction,
+        'booking_id': bookingId,
+        'agency_id': agencyId,
+        'status': status,
+        'duration_seconds': durationSeconds,
+        'notes': notes,
+        'scheduled_callback_at': scheduledCallbackAt?.toIso8601String(),
+        'telephony_provider': telephonyProvider,
+        'recording_url': recordingUrl,
+      };
+
+      final response = await http
+          .post(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createCallLog error: $e');
+    }
+    return null;
+  }
+
+  /// Обновление статуса звонка или заметок
+  static Future<CallLogItem?> updateCallLog({
+    required String callId,
+    String? status,
+    int? durationSeconds,
+    String? notes,
+    DateTime? scheduledCallbackAt,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/logs/$callId');
+      final body = <String, dynamic>{};
+      if (status != null) body['status'] = status;
+      if (durationSeconds != null) body['duration_seconds'] = durationSeconds;
+      if (notes != null) body['notes'] = notes;
+      if (scheduledCallbackAt != null) body['scheduled_callback_at'] = scheduledCallbackAt.toIso8601String();
+
+      final response = await http
+          .patch(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] updateCallLog error: $e');
+    }
+    return null;
+  }
+
+  /// Симуляция / запуск автообзвона через виртуальную IP-АТС
+  static Future<CallLogItem?> simulateVoipCall({
+    required String targetPhone,
+    required String targetName,
+    String targetType = 'customer',
+    String? bookingId,
+    String? agencyId,
+    String simulatedOutcome = 'successful',
+    String? notes,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/crm/calls/simulate-voip');
+      final body = <String, dynamic>{
+        'target_phone': targetPhone,
+        'target_name': targetName,
+        'target_type': targetType,
+        'booking_id': bookingId,
+        'agency_id': agencyId,
+        'simulated_outcome': simulatedOutcome,
+        'notes': notes,
+      };
+
+      final response = await http
+          .post(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return CallLogItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] simulateVoipCall error: $e');
+    }
+    return null;
   }
 }

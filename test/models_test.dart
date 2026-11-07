@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turfirm/models/booking.dart';
+import 'package:turfirm/models/crm_models.dart';
 import 'package:turfirm/models/financial_summary.dart';
 import 'package:turfirm/models/referral.dart';
 import 'package:turfirm/models/review.dart';
@@ -341,6 +342,64 @@ void main() {
       expect(summary.chartPoints.first.date, '07.11');
       expect(summary.recentTransactions.first.isIncome, isTrue);
       expect(summary.recentTransactions.first.amount, 450000);
+    });
+
+    test('CRM Models: CallQueueItem, CallLogItem, CallStats deserialization', () {
+      final queueJson = {
+        'id': 'BK-101',
+        'target_type': 'customer',
+        'target_name': 'Динара Серикова',
+        'target_phone': '+7 701 555 77 88',
+        'tour_title': 'Тур в Дубай 5★',
+        'booking_id': 'BK-101',
+        'booking_status': 'paid',
+        'total_price': 380000,
+        'priority': 'callback',
+        'last_call_at': '2026-11-07T14:00:00Z',
+        'last_call_status': 'callback_needed',
+        'last_call_notes': 'Перезвонить вечером',
+        'reason': 'Запланирован перезвон',
+      };
+      final queueItem = CallQueueItem.fromJson(queueJson);
+      expect(queueItem.targetName, 'Динара Серикова');
+      expect(queueItem.priority, 'callback');
+      expect(queueItem.totalPrice, 380000);
+
+      final logJson = {
+        'id': 'CALL-99',
+        'direction': 'outbound',
+        'target_type': 'customer',
+        'target_name': 'Динара Серикова',
+        'target_phone': '+7 701 555 77 88',
+        'booking_id': 'BK-101',
+        'manager_name': 'Алихан Менеджер',
+        'tour_title': 'Тур в Дубай 5★',
+        'status': 'successful',
+        'duration_seconds': 145,
+        'notes': 'Тур подтвержден',
+        'telephony_provider': 'mango',
+        'recording_url': 'https://storage.sapar.travel/rec.mp3',
+        'created_at': '2026-11-07T14:30:00Z',
+      };
+      final logItem = CallLogItem.fromJson(logJson);
+      expect(logItem.id, 'CALL-99');
+      expect(logItem.status, 'successful');
+      expect(logItem.formattedDuration, '2 мин 25 сек');
+      expect(logItem.telephonyProvider, 'mango');
+
+      final statsJson = {
+        'total_calls': 15,
+        'calls_today': 8,
+        'successful_calls': 12,
+        'answer_rate_pct': 80.0,
+        'avg_duration_seconds': 110,
+        'pending_callbacks_count': 3,
+        'status_breakdown': {'successful': 12, 'callback_needed': 3},
+      };
+      final stats = CallStats.fromJson(statsJson);
+      expect(stats.totalCalls, 15);
+      expect(stats.answerRatePct, 80.0);
+      expect(stats.statusBreakdown['successful'], 12);
     });
   });
 

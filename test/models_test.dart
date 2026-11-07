@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turfirm/models/booking.dart';
+import 'package:turfirm/models/financial_summary.dart';
 import 'package:turfirm/models/referral.dart';
 import 'package:turfirm/models/review.dart';
 import 'package:turfirm/models/tour.dart';
@@ -250,6 +251,69 @@ void main() {
       final bResult = BookingResult.fromJson(resJson);
       expect(bResult.referralCode, 'TRAVEL_PRO');
       expect(bResult.referralReward, 6000);
+    });
+
+    test('FinancialSummary and FinancialRecordItem deserialization', () {
+      final json = {
+        'period': 'all',
+        'totalIncome': 1249800,
+        'totalExpense': 628197,
+        'netProfit': 621603,
+        'marginPercentage': 49.7,
+        'incomeBreakdown': [
+          {
+            'category': 'tour_payments',
+            'label': 'Оплаты туров клиентами',
+            'amount': 490000,
+            'percentage': 39.2,
+          },
+          {
+            'category': 'advertising',
+            'label': 'Реклама и спонсорские баннеры',
+            'amount': 750000,
+            'percentage': 60.0,
+          }
+        ],
+        'expenseBreakdown': [
+          {
+            'category': 'agency_payouts',
+            'label': 'Выплаты турагентствам (нетто)',
+            'amount': 455700,
+            'percentage': 72.5,
+          }
+        ],
+        'chartPoints': [
+          {
+            'date': '07.11',
+            'income': 1249800,
+            'expense': 628197,
+            'net': 621603,
+          }
+        ],
+        'recentTransactions': [
+          {
+            'id': 'rec-1',
+            'type': 'income',
+            'category': 'advertising',
+            'amount': 450000,
+            'title': 'Реклама Rixos',
+            'description': 'Баннер на главной',
+            'referenceId': 'AD-1',
+            'createdAt': '2026-11-07T12:00:00Z',
+          }
+        ],
+      };
+
+      final summary = FinancialSummary.fromJson(json);
+      expect(summary.totalIncome, 1249800);
+      expect(summary.totalExpense, 628197);
+      expect(summary.netProfit, 621603);
+      expect(summary.marginPercentage, 49.7);
+      expect(summary.incomeBreakdown.length, 2);
+      expect(summary.expenseBreakdown.length, 1);
+      expect(summary.chartPoints.first.date, '07.11');
+      expect(summary.recentTransactions.first.isIncome, isTrue);
+      expect(summary.recentTransactions.first.amount, 450000);
     });
   });
 

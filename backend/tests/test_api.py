@@ -681,6 +681,66 @@ def test_referral_system_blogger_flow():
     assert payout_data["remainingBalance"] == stats["balance"] - 1000
 
 
+def test_admin_financial_balance_and_records():
+    """Тест финансового баланса и админ-панели:
+    - Защита доступа (только admin)
+    - Сводка приходов, расходов, чистой прибыли
+    - Внесение рекламных поступлений и операционных затрат
+    - Детализация по категориям и динамика
+    """
+    # 1. Попытка неавторизованного доступа и доступа клиентом
+    unauth = client.get("/api/v1/admin/finances/summary")
+    assert unauth.status_code == 401
+
+    client_login = client.post("/api/v1/auth/login", json={
+        "email": "aigerim@mail.kz",
+        "password": "User123!",
+    })
+    client_token = client_login.json()["access_token"]
+    forbidden = client.get("/api/v1/admin/finances/summary", headers={"Authorization": f"Bearer {client_token}"})
+    assert forbidden.status_code == 403
+
+    # 2. Логин администратора
+    admin_login = client.post("/api/v1/auth/login", json={
+        "email": "admin@sapar.kz",
+        "password": "Admin123!",
+    })
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 3. Получение сводного отчёта
+    summary_res = client.get("/api/v1/admin/finances/summary?period=all", headers=admin_headers)
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+    assert "totalIncome" in summary
+    assert "totalExpense" in summary
+    assert "netProfit" in summary
+    assert summary["netProfit"] == summary["totalIncome"] - summary["totalExpense"]
+    assert "incomeBreakdown" in summary
+    assert "expenseBreakdown" in summary
+    assert "chartPoints" in summary
+    assert "recentTransactions" in summary
+
+    # 4. Добавление записи дохода от рекламы
+    initial_income = summary["totalIncome"]
+    ad_res = client.post("/api/v1/admin/finances/records", headers=admin_headers, json={
+        "type": "income",
+        "category": "advertising",
+        "amount": 250000,
+        "title": "Спонсорский баннер: Отель Rixos Borovoe",
+        "description": "Рекламный блок на главном экране",
+        "referenceId": "AD-BOROVOE-01",
+    })
+    assert ad_res.status_code == 201
+    assert ad_res.json()["amount"] == 250000
+
+    # 5. Проверка обновления сводки после внесения дохода
+    updated_summary = client.get("/api/v1/admin/finances/summary", headers=admin_headers).json()
+    assert updated_summary["totalIncome"] == initial_income + 250000
+
+
+
 
 
 

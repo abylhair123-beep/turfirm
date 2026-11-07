@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/booking.dart';
+import '../models/financial_summary.dart';
 import '../models/referral.dart';
 import '../models/review.dart';
 import '../models/tour.dart';
@@ -1203,5 +1204,58 @@ class ApiService {
         'message': 'Сетевая ошибка: $e',
       };
     }
+  }
+
+  // ==================== АДМИН-ПАНЕЛЬ: ФИНАНСЫ И БАЛАНС ====================
+
+  /// Получение финансовой сводки платформы (приходы, расходы, чистая прибыль)
+  static Future<FinancialSummary?> getAdminFinancialSummary({String period = 'all'}) async {
+    try {
+      final uri = Uri.parse('$baseUrl/admin/finances/summary?period=$period');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return FinancialSummary.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAdminFinancialSummary error: $e');
+    }
+    return null;
+  }
+
+  /// Внесение новой финансовой проводки (рекламный доход, маркетинговый расход)
+  static Future<FinancialRecordItem?> createAdminFinancialRecord({
+    required String type,
+    required String category,
+    required int amount,
+    required String title,
+    String? description,
+    String? referenceId,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/admin/finances/records');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'type': type,
+              'category': category,
+              'amount': amount,
+              'title': title.trim(),
+              if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+              if (referenceId != null && referenceId.trim().isNotEmpty) 'referenceId': referenceId.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return FinancialRecordItem.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createAdminFinancialRecord error: $e');
+    }
+    return null;
   }
 }

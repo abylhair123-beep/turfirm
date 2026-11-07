@@ -18,6 +18,7 @@ if not _app_logger.handlers:
     _app_logger.setLevel(logging.INFO)
     _app_logger.propagate = False
 
+from app.admin.router import router as admin_router
 from app.agencies.router import router as agencies_router
 from app.auth.router import router as auth_router
 from app.bookings.router import router as bookings_router
@@ -101,6 +102,7 @@ app.include_router(storage_router, prefix=settings.api_v1_prefix)
 app.include_router(favorites_router, prefix=settings.api_v1_prefix)
 app.include_router(reviews_router, prefix=settings.api_v1_prefix)
 app.include_router(referrals_router, prefix=settings.api_v1_prefix)
+app.include_router(admin_router, prefix=settings.api_v1_prefix)
 
 # Раздача локально загруженных медиа-файлов по /uploads/...
 os.makedirs(settings.upload_dir, exist_ok=True)

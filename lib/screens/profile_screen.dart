@@ -5,6 +5,7 @@ import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
+import 'admin_finance_screen.dart';
 import 'agency_dashboard_screen.dart';
 import 'auth_screen.dart';
 import 'bookings_list_screen.dart';
@@ -273,6 +274,85 @@ class _AuthenticatedView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
+
+        // Админ-панель: Финансовый баланс платформы
+        if (user.isAdmin == true) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4A148C), Color(0xFF7B1FA2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4A148C).withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminFinanceScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Баланс платформы',
+                                  style: AppText.sora(size: 15, weight: FontWeight.w700, color: Colors.white),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amberAccent,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('ADMIN', style: TextStyle(color: Color(0xFF4A148C), fontWeight: FontWeight.bold, fontSize: 10)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Приход, расход, выплаты агентствам и чистая прибыль',
+                              style: AppText.work(size: 12, color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
 
         // Панель B2B и управления
         if (user.isAgency == true || user.isAdmin == true) ...[

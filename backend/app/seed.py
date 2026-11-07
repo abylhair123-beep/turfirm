@@ -62,9 +62,9 @@ def apply_demo_marketing(db: Session) -> None:
 
     now = datetime.now(timezone.utc)
     demo = {
-        "dubai-5n": dict(old_price=459000, is_hot=True, hot_until=now + timedelta(days=2), seats_left=3),
-        "antalya-7n": dict(old_price=289000, seats_left=5),
-        "italy-visa-7n": dict(old_price=599000, is_hot=True, hot_until=now + timedelta(days=1, hours=6), seats_left=2),
+        "dubai-5n": dict(old_price=459000, is_hot=True, hot_until=now + timedelta(days=2), seats_left=15),
+        "antalya-7n": dict(old_price=289000, seats_left=20),
+        "italy-visa-7n": dict(old_price=599000, is_hot=True, hot_until=now + timedelta(days=1, hours=6), seats_left=12),
     }
     for t in tours:
         if not t.installment_months:

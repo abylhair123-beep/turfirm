@@ -543,35 +543,40 @@ class _BottomTabBar extends StatelessWidget {
             color: Colors.white,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
-          padding: const EdgeInsets.only(top: 12, bottom: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              for (var i = 0; i < tabs.length; i++)
-                GestureDetector(
-                  onTap: () => onChanged(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIcon(
-                        tabs[i].$1,
-                        size: 20,
-                        color: i == index ? AppColors.teal : AppColors.mutedLight,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (var i = 0; i < tabs.length; i++)
+                    GestureDetector(
+                      onTap: () => onChanged(i),
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AppIcon(
+                            tabs[i].$1,
+                            size: 20,
+                            color: i == index ? AppColors.teal : AppColors.mutedLight,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tabs[i].$2,
+                            style: AppText.work(
+                              size: 11,
+                              weight: i == index ? FontWeight.w600 : FontWeight.w400,
+                              color: i == index ? AppColors.teal : AppColors.mutedLight,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tabs[i].$2,
-                        style: AppText.work(
-                          size: 11,
-                          weight: i == index ? FontWeight.w600 : FontWeight.w400,
-                          color: i == index ? AppColors.teal : AppColors.mutedLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+                    ),
+                ],
+              ),
+            ),
           ),
         );
       },

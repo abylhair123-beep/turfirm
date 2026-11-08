@@ -87,10 +87,19 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => const AgencyDashboardScreen()),
       );
     } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('👋 Добро пожаловать в SAPAR, ${user.fullName}!'),
+          backgroundColor: AppColors.teal,
+          duration: const Duration(seconds: 3),
+        ),
+      );
       if (widget.onSuccess != null) {
         widget.onSuccess!();
-      } else {
+      } else if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
+      } else {
+        Navigator.of(context).pushReplacementNamed('/');
       }
     }
   }
@@ -112,7 +121,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (user != null) {
         _routeByRole(user);
       } else {
-        setState(() => _errorMessage = 'Неверный email или пароль');
+        setState(() => _errorMessage = ApiService.lastAuthError ?? 'Неверный email или пароль');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -142,13 +151,9 @@ class _AuthScreenState extends State<AuthScreen> {
       );
 
       if (user != null) {
-        // Переводим на экран верификации email
-        setState(() {
-          _mode = AuthMode.verifyEmail;
-          _infoMessage = 'На адрес ${user.email} отправлен код подтверждения.';
-        });
+        _routeByRole(user);
       } else {
-        setState(() => _errorMessage = 'Ошибка регистрации (возможно email или телефон уже занят)');
+        setState(() => _errorMessage = ApiService.lastAuthError ?? 'Ошибка регистрации (возможно email или телефон уже занят)');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

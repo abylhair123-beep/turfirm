@@ -1,18 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="SAPAR — сервис поиска и бронирования туров по Казахстану и миру.">
   <meta name="theme-color" content="#0d3836">
+  <meta name="color-scheme" content="dark light">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS PWA meta tags -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SAPAR">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+
+  <!-- iOS Splash Screen (all iPhone sizes) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)"
+        href="icons/Icon-512.png">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
+        href="icons/Icon-512.png">
+
+  <!-- Prevent phone number auto-detection -->
+  <meta name="format-detection" content="telephone=no">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
@@ -20,16 +55,34 @@
   <title>SAPAR — Туры и Путешествия</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    body {
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
+      /* Prevent pull-to-refresh in standalone mode */
+      overscroll-behavior: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      /* iOS safe area support */
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    body {
       background-color: #0d3836;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: white;
+      /* Prevent text selection when tapping */
+      -webkit-user-select: none;
+      user-select: none;
+      /* Disable callout on long press */
+      -webkit-touch-callout: none;
+      /* Smoother scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
     }
     .loading-container {
       text-align: center;
@@ -47,6 +100,11 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    /* Splash screen fade out */
+    .loading-container.fade-out {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -60,8 +118,8 @@
   <div id="pwa-install-banner" style="display:none; position:fixed; bottom:24px; left:16px; right:16px; max-width:440px; margin:0 auto; background:rgba(13, 56, 54, 0.96); backdrop-filter:blur(12px); border:1px solid rgba(255,114,83,0.45); border-radius:18px; padding:12px 16px; box-shadow:0 12px 32px rgba(0,0,0,0.55); z-index:999999; font-family:-apple-system,BlinkMacSystemFont,sans-serif; color:white; align-items:center; gap:12px;">
     <img src="icons/Icon-192.png" style="width:46px; height:46px; border-radius:12px; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,0.35);" alt="SAPAR">
     <div style="flex:1; min-width:0;">
-      <div style="font-weight:700; font-size:14px; color:#ffffff;">Приложение SAPAR</div>
-      <div style="font-size:12px; color:rgba(255,255,255,0.75); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Иконка на экран телефона</div>
+      <div style="font-weight:700; font-size:14px; color:#ffffff;">Установить SAPAR</div>
+      <div style="font-size:12px; color:rgba(255,255,255,0.75); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Полноценное приложение на телефоне</div>
     </div>
     <button id="pwa-install-btn" style="background:#ff7253; color:white; border:none; border-radius:10px; padding:9px 14px; font-weight:700; font-size:13px; cursor:pointer; flex-shrink:0; box-shadow:0 2px 8px rgba(255,114,83,0.45);">
       Установить
@@ -70,28 +128,66 @@
       ✕
     </button>
   </div>
+
   <script>
+    // ============ Service Worker Registration ============
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then((registration) => {
+          console.log('[SAPAR] Service Worker registered, scope:', registration.scope);
+
+          // Check for updates periodically (every 60 min)
+          setInterval(() => {
+            registration.update();
+          }, 60 * 60 * 1000);
+
+          // Notify user of updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                console.log('[SAPAR] New version available, will activate on next visit');
+              }
+            });
+          });
+        }).catch((error) => {
+          console.warn('[SAPAR] Service Worker registration failed:', error);
+        });
+      });
+    }
+
+    // ============ PWA Install Prompt ============
     let deferredPrompt = null;
     const banner = document.getElementById('pwa-install-banner');
     const installBtn = document.getElementById('pwa-install-btn');
     const closeBtn = document.getElementById('pwa-close-btn');
+    const DISMISS_KEY = 'sapar_pwa_dismiss';
 
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+      || document.referrer.includes('android-app://');
+
     if (!isStandalone) {
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        banner.style.display = 'flex';
-      });
+      // Don't show if user dismissed recently (within 3 days)
+      const dismissedAt = localStorage.getItem(DISMISS_KEY);
+      const showBanner = !dismissedAt || (Date.now() - parseInt(dismissedAt)) > 3 * 24 * 60 * 60 * 1000;
 
-      setTimeout(() => {
-        if (!isStandalone && banner.style.display !== 'flex') {
-          if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            banner.style.display = 'flex';
+      if (showBanner) {
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          banner.style.display = 'flex';
+        });
+
+        // Fallback for iOS (no beforeinstallprompt event)
+        setTimeout(() => {
+          if (!isStandalone && banner.style.display !== 'flex') {
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream) {
+              banner.style.display = 'flex';
+            }
           }
-        }
-      }, 2500);
+        }, 3000);
+      }
 
       installBtn.addEventListener('click', async () => {
         if (deferredPrompt) {
@@ -104,15 +200,27 @@
         } else {
           const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
           if (isIOS) {
-            alert('Чтобы установить иконку SAPAR:\n1. Нажмите иконку «Поделиться» (квадрат со стрелкой вверх) внизу Safari\n2. Выберите «На экран «Домой»');
+            alert('Чтобы установить SAPAR как приложение:\n\n1. Нажмите кнопку «Поделиться» (□↑) внизу экрана\n2. Пролистайте вниз и выберите «На экран «Домой»\n3. Нажмите «Добавить»\n\nSAPAR откроется как полноценное приложение!');
           } else {
-            alert('Чтобы установить иконку SAPAR:\n1. Нажмите на меню браузера (три точки ⋮ в правом верхнем углу)\n2. Выберите «Добавить на главный экран» или «Установить приложение»');
+            alert('Чтобы установить SAPAR как приложение:\n\n1. Нажмите ⋮ (три точки) в правом верхнем углу\n2. Выберите «Установить приложение» или «Добавить на главный экран»');
           }
         }
       });
 
       closeBtn.addEventListener('click', () => {
         banner.style.display = 'none';
+        localStorage.setItem(DISMISS_KEY, Date.now().toString());
+      });
+    }
+
+    // ============ Standalone Mode Enhancements ============
+    if (isStandalone) {
+      // Prevent default gestures that break app experience
+      document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+      // Handle back button / navigation in standalone mode
+      window.addEventListener('popstate', () => {
+        // Let Flutter handle navigation
       });
     }
   </script>

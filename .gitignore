@@ -26,6 +26,10 @@ backend/sapar.db
 .env
 backend/.env
 
+# Binaries & Backups
+*.apk
+*.bak
+
 # OS
 .DS_Store
 Thumbs.db

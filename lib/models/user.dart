@@ -48,4 +48,26 @@ class AppUser {
       'is_phone_verified': isPhoneVerified,
     };
   }
+
+  AppUser copyWith({
+    String? id,
+    String? email,
+    String? fullName,
+    String? phone,
+    String? role,
+    bool? isActive,
+    bool? isEmailVerified,
+    bool? isPhoneVerified,
+  }) {
+    return AppUser(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      isActive: isActive ?? this.isActive,
+      isEmailVerified: isEmailVerified ?? this.isEmailVerified,
+      isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
+    );
+  }
 }

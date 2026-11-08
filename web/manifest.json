@@ -1,13 +1,19 @@
 {
     "name": "SAPAR — Бронирование Туров",
     "short_name": "SAPAR",
+    "description": "Сервис поиска и бронирования туров по Казахстану и миру.",
     "start_url": ".",
+    "scope": ".",
+    "id": "/",
     "display": "standalone",
+    "display_override": ["standalone", "minimal-ui"],
     "background_color": "#0D3836",
     "theme_color": "#0D3836",
-    "description": "Сервис поиска и бронирования туров по Казахстану и миру.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "categories": ["travel", "lifestyle"],
+    "lang": "ru",
+    "dir": "ltr",
     "icons": [
         {
             "src": "icons/Icon-192.png",
@@ -30,6 +36,28 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "Главный экран SAPAR"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Поиск туров",
+            "short_name": "Поиск",
+            "url": ".",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192"
+                }
+            ]
         }
     ]
 }

@@ -5,6 +5,7 @@ import 'screens/onboarding_screen.dart';
 import 'services/api_service.dart';
 import 'services/locale_service.dart';
 import 'services/notification_service.dart';
+import 'services/pwa_service.dart';
 import 'services/sentry_service.dart';
 import 'theme/app_theme.dart';
 
@@ -12,6 +13,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.init();
   await LocaleService.init();
+  await PwaService.init();
 
   await SentryService.init(
     appRunner: () => runApp(const SaparApp()),

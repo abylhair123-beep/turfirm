@@ -8,6 +8,7 @@ import '../models/crm_models.dart';
 import '../models/financial_summary.dart';
 import '../models/referral.dart';
 import '../models/review.dart';
+import '../models/ticket_model.dart';
 import '../models/tour.dart';
 import '../models/user.dart';
 
@@ -1839,5 +1840,116 @@ class ApiService {
       debugPrint('[ApiService] simulateVoipCall error: $e');
     }
     return null;
+  }
+
+  // ==================== БИЛЕТЫ: АВИА & ЖД ====================
+
+  /// Получение популярных городов отправления / прибытия
+  static Future<List<CityOption>> getTicketCities() async {
+    try {
+      final uri = Uri.parse('$baseUrl/tickets/cities');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => CityOption.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getTicketCities error: $e');
+    }
+    return [];
+  }
+
+  /// Поиск авиарейсов и поездов
+  static Future<List<TicketFlight>> searchTickets({
+    String? departureCity,
+    String? arrivalCity,
+    String? date,
+    String transportType = 'all',
+    String? seatClass,
+    bool directOnly = false,
+    bool hasBaggage = false,
+    int? maxPrice,
+    String sortBy = 'price_asc',
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'transport_type': transportType,
+        'sort_by': sortBy,
+      };
+      if (departureCity != null && departureCity.isNotEmpty && departureCity != 'Все') {
+        queryParams['departure_city'] = departureCity;
+      }
+      if (arrivalCity != null && arrivalCity.isNotEmpty && arrivalCity != 'Все') {
+        queryParams['arrival_city'] = arrivalCity;
+      }
+      if (date != null && date.isNotEmpty) queryParams['date'] = date;
+      if (seatClass != null && seatClass != 'all') queryParams['seat_class'] = seatClass;
+      if (directOnly) queryParams['direct_only'] = 'true';
+      if (hasBaggage) queryParams['has_baggage'] = 'true';
+      if (maxPrice != null) queryParams['max_price'] = maxPrice.toString();
+
+      final uri = Uri.parse('$baseUrl/tickets/search').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => TicketFlight.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] searchTickets error: $e');
+    }
+    return [];
+  }
+
+  /// Оформление и оплата билета
+  static Future<TicketBooking?> bookTicket({
+    required String flightId,
+    required String customerName,
+    required String customerPhone,
+    required String customerEmail,
+    required String documentNumber,
+    int passengersCount = 1,
+    String paymentMethod = 'Kaspi Pay',
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/tickets/book');
+      final body = {
+        'flight_id': flightId,
+        'customer_name': customerName,
+        'customer_phone': customerPhone,
+        'customer_email': customerEmail,
+        'document_number': documentNumber,
+        'passengers_count': passengersCount,
+        'payment_method': paymentMethod,
+      };
+
+      final response = await http
+          .post(uri, headers: _headers(), body: jsonEncode(body))
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final json = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return TicketBooking.fromJson(json);
+      }
+    } catch (e) {
+      debugPrint('[ApiService] bookTicket error: $e');
+    }
+    return null;
+  }
+
+  /// Получение моих купленных билетов
+  static Future<List<TicketBooking>> getMyTicketBookings({String? email}) async {
+    try {
+      final queryParams = <String, String>{};
+      if (email != null && email.isNotEmpty) queryParams['email'] = email;
+      final uri = Uri.parse('$baseUrl/tickets/bookings/me').replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        final list = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return list.map((item) => TicketBooking.fromJson(item as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getMyTicketBookings error: $e');
+    }
+    return [];
   }
 }

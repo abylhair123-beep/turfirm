@@ -5,8 +5,10 @@ import 'package:turfirm/models/crm_models.dart';
 import 'package:turfirm/models/financial_summary.dart';
 import 'package:turfirm/models/referral.dart';
 import 'package:turfirm/models/review.dart';
+import 'package:turfirm/models/ticket_model.dart';
 import 'package:turfirm/models/tour.dart';
 import 'package:turfirm/models/user.dart';
+import 'package:turfirm/screens/payment_methods_screen.dart';
 import 'package:turfirm/services/api_service.dart';
 import 'package:turfirm/services/locale_service.dart';
 import 'package:turfirm/services/notification_service.dart';
@@ -400,6 +402,79 @@ void main() {
       expect(stats.totalCalls, 15);
       expect(stats.answerRatePct, 80.0);
       expect(stats.statusBreakdown['successful'], 12);
+    });
+
+    test('TicketFlight and TicketBooking fromJson / toJson', () {
+      final flightJson = {
+        'id': 'tk-air-1',
+        'transport_type': 'flight',
+        'carrier_name': 'Air Astana',
+        'flight_number': 'KC-911',
+        'departure_city': 'Алматы',
+        'departure_airport': 'ALA',
+        'arrival_city': 'Анталия',
+        'arrival_airport': 'AYT',
+        'departure_time': '2026-11-20T08:30:00',
+        'arrival_time': '2026-11-20T12:45:00',
+        'duration_minutes': 375,
+        'price_kzt': 145000,
+        'seats_left': 18,
+        'baggage_included': true,
+        'baggage_info': '23 кг багаж + 8 кг ручная',
+        'seat_class': 'economy',
+        'is_charter_quota': true,
+        'refundable': true,
+      };
+
+      final flight = TicketFlight.fromJson(flightJson);
+      expect(flight.carrierName, 'Air Astana');
+      expect(flight.flightNumber, 'KC-911');
+      expect(flight.durationFormatted, '6 ч 15 мин');
+      expect(flight.isFlight, isTrue);
+
+      final bookingJson = {
+        'id': 'tb-101',
+        'flight_id': 'tk-air-1',
+        'ticket_number': '465-9821345',
+        'pnr_code': 'KZ7Q9P',
+        'customer_name': 'Тимур Сериков',
+        'customer_phone': '+7 701 555 12 34',
+        'customer_email': 'timur@sapar.kz',
+        'document_number': 'N12345678',
+        'passengers_count': 1,
+        'seat_number': '14B',
+        'total_price_kzt': 145000,
+        'status': 'confirmed',
+        'payment_method': 'Kaspi Pay',
+        'created_at': '2026-11-09T10:00:00',
+        'flight': flightJson,
+      };
+
+      final booking = TicketBooking.fromJson(bookingJson);
+      expect(booking.ticketNumber, '465-9821345');
+      expect(booking.pnrCode, 'KZ7Q9P');
+      expect(booking.seatNumber, '14B');
+      expect(booking.statusLabel, 'Подтверждён');
+      expect(booking.flight?.carrierName, 'Air Astana');
+    });
+
+    test('SavedCardItem serialization and default toggle', () {
+      final card = SavedCardItem(
+        id: 'c-1',
+        brand: 'Kaspi',
+        cardNumber: '•••• 4589',
+        cardHolder: 'SAPAR USER',
+        expiryDate: '09/27',
+        isDefault: true,
+      );
+
+      final json = card.toJson();
+      expect(json['brand'], 'Kaspi');
+      expect(json['cardNumber'], '•••• 4589');
+
+      final reconstructed = SavedCardItem.fromJson(json);
+      expect(reconstructed.id, 'c-1');
+      expect(reconstructed.isDefault, isTrue);
     });
   });
 

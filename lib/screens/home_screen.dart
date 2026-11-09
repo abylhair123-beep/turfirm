@@ -15,6 +15,7 @@ import 'create_tour_screen.dart';
 import 'favorites_screen.dart';
 import 'profile_screen.dart';
 import 'search_screen.dart';
+import 'tickets_screen.dart';
 import 'tour_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -271,7 +272,47 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
             ),
             if (_searchFocus.hasFocus && _searchController.text.trim().isNotEmpty)
               _buildHomeSuggestions(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            // Быстрый переключатель сервисов
+            Row(
+              children: [
+                Expanded(
+                  child: _serviceQuickButton(
+                    icon: Icons.beach_access_rounded,
+                    label: 'Туры',
+                    isActive: true,
+                    onTap: () {},
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _serviceQuickButton(
+                    icon: Icons.flight_takeoff_rounded,
+                    label: 'Авиабилеты',
+                    isActive: false,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const TicketsScreen(initialTransportType: 'flight')),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _serviceQuickButton(
+                    icon: Icons.train_rounded,
+                    label: 'ЖД билеты',
+                    isActive: false,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const TicketsScreen(initialTransportType: 'train')),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             SizedBox(
               height: 40,
               child: ListView.separated(
@@ -352,6 +393,60 @@ class _HomeCatalogTabState extends State<_HomeCatalogTab> {
                   ),
                 ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceQuickButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isActive ? AppColors.teal : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isActive ? AppColors.teal : AppColors.border,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: AppColors.teal.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: isActive ? Colors.white : AppColors.ink),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isActive ? Colors.white : AppColors.ink,
+                      fontSize: 12.5,
+                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

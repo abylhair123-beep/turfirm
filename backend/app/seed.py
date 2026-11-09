@@ -17,6 +17,7 @@ from app.payments.models import Payment
 from app.promo.models import PromoCode
 from app.referrals.models import ReferralPartner
 from app.reviews.models import Review
+from app.tickets.models import TicketBooking, TicketFlight
 from app.tours.models import Tour
 
 logging.basicConfig(level=logging.INFO)
@@ -205,6 +206,9 @@ def seed_data(db: Session) -> None:
         apply_demo_catalog(db)
         apply_demo_hotels(db)
         cache.delete_pattern("sapar:cache:tours:*")  # сбросить устаревший кэш каталога
+        seed_referrals(db)
+        seed_crm_calls(db)
+        seed_tickets(db)
         logger.info("Database already seeded. Skipping.")
         return
 
@@ -668,6 +672,190 @@ def seed_crm_calls(db: Session) -> None:
     db.add_all(calls)
     db.commit()
     logger.info("Successfully seeded CRM call logs!")
+    seed_tickets(db)
+
+
+def seed_tickets(db: Session) -> None:
+    """Сидирование авиарейсов и ЖД поездов (чартеры и регулярные рейсы)."""
+    if db.query(TicketFlight).first():
+        return
+
+    now = datetime.now(timezone.utc)
+    day = timedelta(days=1)
+
+    flights = [
+        TicketFlight(
+            id="FLT-KC853",
+            transport_type="flight",
+            carrier_name="Air Astana",
+            carrier_code="KC",
+            flight_number="KC-853",
+            departure_city="Алматы",
+            arrival_city="Астана",
+            departure_airport="ALA (Алматы)",
+            arrival_airport="NQZ (Астана T2)",
+            departure_time=now + day + timedelta(hours=8),
+            arrival_time=now + day + timedelta(hours=9, minutes=40),
+            duration_minutes=100,
+            is_direct=True,
+            stops_count=0,
+            baggage_included=True,
+            baggage_weight_kg=20,
+            hand_luggage_kg=8,
+            seat_class="economy",
+            price=34500,
+            available_seats=18,
+            aircraft_or_train_model="Airbus A321neo",
+            provider="sapar_charter",
+        ),
+        TicketFlight(
+            id="FLT-IQ411",
+            transport_type="flight",
+            carrier_name="FlyArystan",
+            carrier_code="IQ",
+            flight_number="IQ-411",
+            departure_city="Алматы",
+            arrival_city="Астана",
+            departure_airport="ALA (Алматы)",
+            arrival_airport="NQZ (Астана T2)",
+            departure_time=now + day + timedelta(hours=12),
+            arrival_time=now + day + timedelta(hours=13, minutes=45),
+            duration_minutes=105,
+            is_direct=True,
+            stops_count=0,
+            baggage_included=False,
+            baggage_weight_kg=0,
+            hand_luggage_kg=5,
+            seat_class="economy",
+            price=18900,
+            available_seats=12,
+            aircraft_or_train_model="Airbus A320",
+            provider="sapar_charter",
+        ),
+        TicketFlight(
+            id="FLT-KC915",
+            transport_type="flight",
+            carrier_name="Air Astana",
+            carrier_code="KC",
+            flight_number="KC-915",
+            departure_city="Алматы",
+            arrival_city="Анталья",
+            departure_airport="ALA (Алматы)",
+            arrival_airport="AYT (Анталья T1)",
+            departure_time=now + day * 2 + timedelta(hours=6),
+            arrival_time=now + day * 2 + timedelta(hours=11, minutes=30),
+            duration_minutes=330,
+            is_direct=True,
+            stops_count=0,
+            baggage_included=True,
+            baggage_weight_kg=23,
+            hand_luggage_kg=8,
+            seat_class="economy",
+            price=148000,
+            available_seats=15,
+            aircraft_or_train_model="Boeing 767-300",
+            provider="sapar_charter",
+        ),
+        TicketFlight(
+            id="FLT-IQ505",
+            transport_type="flight",
+            carrier_name="FlyArystan",
+            carrier_code="IQ",
+            flight_number="IQ-505",
+            departure_city="Астана",
+            arrival_city="Дубай",
+            departure_airport="NQZ (Астана T1)",
+            arrival_airport="DXB (Дубай T2)",
+            departure_time=now + day * 3 + timedelta(hours=9),
+            arrival_time=now + day * 3 + timedelta(hours=13, minutes=50),
+            duration_minutes=290,
+            is_direct=True,
+            stops_count=0,
+            baggage_included=True,
+            baggage_weight_kg=20,
+            hand_luggage_kg=8,
+            seat_class="economy",
+            price=129000,
+            available_seats=11,
+            aircraft_or_train_model="Airbus A320neo",
+            provider="sapar_charter",
+        ),
+        TicketFlight(
+            id="FLT-DV703",
+            transport_type="flight",
+            carrier_name="SCAT Airlines",
+            carrier_code="DV",
+            flight_number="DV-703",
+            departure_city="Алматы",
+            arrival_city="Шымкент",
+            departure_airport="ALA (Алматы)",
+            arrival_airport="CIT (Шымкент)",
+            departure_time=now + day + timedelta(hours=15),
+            arrival_time=now + day + timedelta(hours=16, minutes=10),
+            duration_minutes=70,
+            is_direct=True,
+            stops_count=0,
+            baggage_included=True,
+            baggage_weight_kg=20,
+            hand_luggage_kg=5,
+            seat_class="economy",
+            price=21500,
+            available_seats=25,
+            aircraft_or_train_model="Boeing 737-800",
+            provider="sapar_charter",
+        ),
+        TicketFlight(
+            id="TRN-001X",
+            transport_type="train",
+            carrier_name="КТЖ / Пассажирские перевозки",
+            carrier_code="KTZ",
+            flight_number="001X Тальго",
+            departure_city="Алматы",
+            arrival_city="Астана",
+            departure_airport="Алматы-2 (вокзал)",
+            arrival_airport="Нур-Султан 1 (вокзал)",
+            departure_time=now + day + timedelta(hours=18),
+            arrival_time=now + day * 2 + timedelta(hours=7),
+            duration_minutes=780,
+            is_direct=True,
+            stops_count=3,
+            baggage_included=True,
+            baggage_weight_kg=36,
+            hand_luggage_kg=10,
+            seat_class="talgo",
+            price=16500,
+            available_seats=36,
+            aircraft_or_train_model="Тальго Тулпар",
+            provider="ktz",
+        ),
+        TicketFlight(
+            id="TRN-011T",
+            transport_type="train",
+            carrier_name="КТЖ / Пассажирские перевозки",
+            carrier_code="KTZ",
+            flight_number="011Т Тальго",
+            departure_city="Алматы",
+            arrival_city="Шымкент",
+            departure_airport="Алматы-2 (вокзал)",
+            arrival_airport="Шымкент (вокзал)",
+            departure_time=now + day + timedelta(hours=20),
+            arrival_time=now + day * 2 + timedelta(hours=6),
+            duration_minutes=600,
+            is_direct=True,
+            stops_count=2,
+            baggage_included=True,
+            baggage_weight_kg=36,
+            hand_luggage_kg=10,
+            seat_class="coupe",
+            price=12800,
+            available_seats=30,
+            aircraft_or_train_model="Тальго Тулпар",
+            provider="ktz",
+        ),
+    ]
+    db.add_all(flights)
+    db.commit()
+    logger.info("Successfully seeded Ticket Flights & Trains!")
 
 
 if __name__ == "__main__":

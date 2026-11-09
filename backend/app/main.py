@@ -36,6 +36,7 @@ from app.reviews.router import router as reviews_router
 from app.search.router import router as search_router
 from app.seed import seed_data
 from app.storage.router import router as storage_router
+from app.tickets.router import router as tickets_router
 from app.tours.router import router as tours_router
 
 # Мониторинг ошибок Sentry
@@ -109,6 +110,7 @@ app.include_router(promo_router, prefix=settings.api_v1_prefix)
 app.include_router(referrals_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix)
 app.include_router(crm_router, prefix=settings.api_v1_prefix)
+app.include_router(tickets_router, prefix=settings.api_v1_prefix)
 
 # Раздача локально загруженных медиа-файлов по /uploads/...
 os.makedirs(settings.upload_dir, exist_ok=True)

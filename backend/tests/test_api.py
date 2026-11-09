@@ -914,6 +914,74 @@ def test_crm_call_center_and_voip_system():
     assert "call_id" in webhook_data
 
 
+def test_tickets_search_and_booking_flow():
+    """Тест модуля билетов: поиск авиа и ЖД рейсов, фильтры, бронирование и получение билетов."""
+    # 1. Популярные города
+    cities_res = client.get("/api/v1/tickets/cities")
+    assert cities_res.status_code == 200
+    cities = cities_res.json()
+    assert len(cities) >= 5
+    city_names = [c["city"] for c in cities]
+    assert "Алматы" in city_names
+    assert "Астана" in city_names
+
+    # 2. Поиск всех билетов
+    search_all = client.get("/api/v1/tickets/search")
+    assert search_all.status_code == 200
+    all_tickets = search_all.json()
+    assert len(all_tickets) >= 5
+
+    # 3. Фильтрация только по авиарейсам
+    flights_res = client.get("/api/v1/tickets/search?transport_type=flight&departure_city=Алматы")
+    assert flights_res.status_code == 200
+    flights = flights_res.json()
+    assert len(flights) >= 1
+    for f in flights:
+        assert f["transport_type"] == "flight"
+        assert "Алматы" in f["departure_city"]
+
+    # 4. Фильтрация только по поездам (ЖД)
+    trains_res = client.get("/api/v1/tickets/search?transport_type=train")
+    assert trains_res.status_code == 200
+    trains = trains_res.json()
+    assert len(trains) >= 1
+    for t in trains:
+        assert t["transport_type"] == "train"
+
+    # 5. Оформление и покупка билета
+    target_flight = flights[0]
+    initial_seats = target_flight["available_seats"]
+
+    book_res = client.post("/api/v1/tickets/book", json={
+        "flight_id": target_flight["id"],
+        "customer_name": "Касымхан Жандосов",
+        "customer_phone": "+7 701 333 44 55",
+        "customer_email": "kasymkhan@sapar.kz",
+        "document_number": "990102300456",
+        "passengers_count": 2,
+        "payment_method": "Kaspi Pay",
+    })
+    assert book_res.status_code == 201
+    booking = book_res.json()
+    assert booking["customer_name"] == "Касымхан Жандосов"
+    assert booking["passengers_count"] == 2
+    assert booking["total_price"] == target_flight["price"] * 2
+    assert "ticket_number" in booking
+    assert "seat_numbers" in booking
+
+    # Проверка списания мест
+    updated_flight_res = client.get(f"/api/v1/tickets/{target_flight['id']}")
+    assert updated_flight_res.status_code == 200
+    assert updated_flight_res.json()["available_seats"] == initial_seats - 2
+
+    # 6. Получение списка моих купленных билетов
+    my_tickets = client.get("/api/v1/tickets/bookings/me?email=kasymkhan@sapar.kz")
+    assert my_tickets.status_code == 200
+    user_bookings = my_tickets.json()
+    assert any(b["id"] == booking["id"] for b in user_bookings)
+
+
+
 
 
 

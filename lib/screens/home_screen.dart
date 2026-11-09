@@ -45,23 +45,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCurrentTab() {
     switch (_tabIndex) {
       case 1:
-        return const SearchScreen();
+        return const TicketsScreen();
       case 2:
-        return const BookingsListScreen();
+        return const SearchScreen();
       case 3:
+        return const BookingsListScreen();
+      case 4:
         return const ProfileScreen();
       default:
         return _HomeCatalogTab(
-          onOpenSearch: () => setState(() => _tabIndex = 1),
+          onOpenSearch: () => setState(() => _tabIndex = 2),
+          onOpenTickets: () => setState(() => _tabIndex = 1),
         );
     }
   }
 }
 
 class _HomeCatalogTab extends StatefulWidget {
-  const _HomeCatalogTab({required this.onOpenSearch});
+  const _HomeCatalogTab({required this.onOpenSearch, this.onOpenTickets});
 
   final VoidCallback onOpenSearch;
+  final VoidCallback? onOpenTickets;
 
   @override
   State<_HomeCatalogTab> createState() => _HomeCatalogTabState();
@@ -622,6 +626,7 @@ class _BottomTabBar extends StatelessWidget {
 
   List<(String, String)> _getTabs() => [
     (AppIcons.home, LocaleService.tr('nav_home')),
+    (AppIcons.flight, LocaleService.tr('nav_tickets')),
     (AppIcons.searchTab, LocaleService.tr('nav_search')),
     (AppIcons.ticket, LocaleService.tr('nav_bookings')),
     (AppIcons.user, LocaleService.tr('nav_profile')),

@@ -58,6 +58,7 @@ class LocaleService {
     'ru': {
       // Табы
       'nav_home': 'Главная',
+      'nav_tickets': 'Билеты',
       'nav_search': 'Поиск',
       'nav_bookings': 'Брони',
       'nav_profile': 'Профиль',
@@ -133,6 +134,7 @@ class LocaleService {
     'kk': {
       // Табы
       'nav_home': 'Басты бет',
+      'nav_tickets': 'Билеттер',
       'nav_search': 'Іздеу',
       'nav_bookings': 'Брондар',
       'nav_profile': 'Профиль',
@@ -208,6 +210,7 @@ class LocaleService {
     'en': {
       // Табы
       'nav_home': 'Home',
+      'nav_tickets': 'Tickets',
       'nav_search': 'Search',
       'nav_bookings': 'Bookings',
       'nav_profile': 'Profile',

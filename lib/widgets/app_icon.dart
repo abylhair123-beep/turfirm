@@ -48,6 +48,9 @@ class AppIcons {
   static const ticket = '''
 <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>''';
 
+  static const flight = '''
+<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 20.5 3c-1-1-3-.5-4.5 1L12.5 7.5 4.3 5.7c-.5-.1-1 .1-1.3.5l-.5.7c-.4.5-.3 1.2.2 1.6l5.3 4.2-2.8 2.8-2.3-.6c-.4-.1-.8.1-1.1.4l-.4.4c-.3.4-.2.9.2 1.2l2.6 2 2 2.6c.3.4.8.5 1.2.2l.4-.4c.3-.3.5-.7.4-1.1l-.6-2.3 2.8-2.8 4.2 5.3c.4.5 1.1.6 1.6.2l.7-.5c.4-.3.6-.8.5-1.3z"/></svg>''';
+
   static const user = '''
 <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6"/></svg>''';
 

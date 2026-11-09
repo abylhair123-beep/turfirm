@@ -1,6 +1,7 @@
 from typing import Dict
 from app.payments.providers.base import BasePaymentProvider
-from app.payments.providers.card import CardPaymentProvider, HalykPaymentProvider
+from app.payments.providers.card import CardPaymentProvider
+from app.payments.providers.halyk import HalykPaymentProvider
 from app.payments.providers.kaspi import KaspiPaymentProvider
 
 _PROVIDERS: Dict[str, BasePaymentProvider] = {
@@ -10,6 +11,8 @@ _PROVIDERS: Dict[str, BasePaymentProvider] = {
     "карта": CardPaymentProvider(),
     "halyk": HalykPaymentProvider(),
     "halyk bank": HalykPaymentProvider(),
+    "halyk epay": HalykPaymentProvider(),
+    "epay": HalykPaymentProvider(),
 }
 
 

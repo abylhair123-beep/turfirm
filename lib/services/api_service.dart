@@ -20,6 +20,7 @@ class PaymentResponseData {
     required this.provider,
     required this.status,
     this.paymentUrl,
+    this.deeplinkUrl,
     this.qrCodeData,
     this.qrCodeUrl,
   });
@@ -30,6 +31,7 @@ class PaymentResponseData {
   final String provider;
   final String status;
   final String? paymentUrl;
+  final String? deeplinkUrl;
   final String? qrCodeData;
   final String? qrCodeUrl;
 
@@ -38,9 +40,10 @@ class PaymentResponseData {
       paymentId: json['paymentId'] as String? ?? json['payment_id'] as String? ?? '',
       bookingId: json['bookingId'] as String? ?? json['booking_id'] as String? ?? '',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
-      provider: json['provider'] as String? ?? 'Kaspi Pay',
+      provider: json['provider'] as String? ?? '',
       status: json['status'] as String? ?? 'pending',
       paymentUrl: json['paymentUrl'] as String? ?? json['payment_url'] as String?,
+      deeplinkUrl: json['deeplinkUrl'] as String? ?? json['deeplink_url'] as String?,
       qrCodeData: json['qrCodeData'] as String? ?? json['qr_code_data'] as String?,
       qrCodeUrl: json['qrCodeUrl'] as String? ?? json['qr_code_url'] as String?,
     );
@@ -1069,6 +1072,20 @@ class ApiService {
       debugPrint('[ApiService] Payment confirmation error: $e');
       return true; // для мок-режима
     }
+  }
+
+  /// Получение статуса шлюзов Kaspi Pay & Halyk E-Pay
+  static Future<Map<String, dynamic>?> getPaymentConfigStatus() async {
+    try {
+      final uri = Uri.parse('$baseUrl/payments/config-status');
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getPaymentConfigStatus error: $e');
+    }
+    return null;
   }
 
   // ==================== ИЗБРАННОЕ ====================

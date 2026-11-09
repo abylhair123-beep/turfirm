@@ -229,9 +229,9 @@ class _AgencyDesktopPortalScreenState extends State<AgencyDesktopPortalScreen> {
                     padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.arrow_back_rounded, color: Color(0xFF94A3B8), size: 18),
-                        const SizedBox(width: 10),
-                        const Expanded(
+                        Icon(Icons.arrow_back_rounded, color: Color(0xFF94A3B8), size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
                           child: Text('Вернуться на витрину', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5), overflow: TextOverflow.ellipsis),
                         ),
                       ],
@@ -248,9 +248,9 @@ class _AgencyDesktopPortalScreenState extends State<AgencyDesktopPortalScreen> {
                     padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
-                        const SizedBox(width: 10),
-                        const Expanded(
+                        Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                        SizedBox(width: 10),
+                        Expanded(
                           child: Text('Выйти из кабинета', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12.5), overflow: TextOverflow.ellipsis),
                         ),
                       ],

@@ -24,6 +24,7 @@ class PaymentInitiateResponse(BaseModel):
     provider: str
     status: str
     payment_url: Optional[str] = Field(default=None, alias="paymentUrl")
+    deeplink_url: Optional[str] = Field(default=None, alias="deeplinkUrl")
     qr_code_data: Optional[str] = Field(default=None, alias="qrCodeData")
     qr_code_url: Optional[str] = Field(default=None, alias="qrCodeUrl")
     created_at: datetime = Field(alias="createdAt")
@@ -67,6 +68,49 @@ class KaspiWebhookResponse(BaseModel):
     result: str = "ok"
     order_id: str = Field(alias="orderId")
     status: str
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class HalykWebhookPayload(BaseModel):
+    invoice_id: str = Field(alias="invoiceId")
+    order_id: Optional[str] = Field(default=None, alias="orderId")
+    status: str  # "paid", "success", "confirmed", "failed", "cancelled"
+    amount: int
+    currency: str = "KZT"
+    reference: Optional[str] = None
+    approval_code: Optional[str] = Field(default=None, alias="approvalCode")
+    signature: Optional[str] = None
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class HalykWebhookResponse(BaseModel):
+    result: str = "ok"
+    invoice_id: str = Field(alias="invoiceId")
+    status: str
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
+class PaymentRefundRequest(BaseModel):
+    reason: str = Field(default="Запрос на возврат средств клиентом")
+    amount: Optional[int] = Field(default=None, description="Частичный или полный возврат (в тенге)")
+
+
+class PaymentRefundResponse(BaseModel):
+    payment_id: str = Field(alias="paymentId")
+    booking_id: str = Field(alias="bookingId")
+    status: str
+    refunded_amount: int = Field(alias="refundedAmount")
+    reason: str
+    processed_at: datetime = Field(alias="processedAt")
 
     model_config = {
         "populate_by_name": True,

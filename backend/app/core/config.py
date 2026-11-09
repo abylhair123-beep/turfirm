@@ -34,9 +34,13 @@ class Settings(BaseSettings):
     kaspi_test_mode: bool = True
     kaspi_webhook_secret: Optional[str] = None
 
-    # Другие провайдеры (Halyk Bank / Карта)
+    # Другие провайдеры (Halyk Bank E-Pay / Карта)
     halyk_client_id: Optional[str] = None
     halyk_client_secret: Optional[str] = None
+    halyk_terminal_id: Optional[str] = None
+    halyk_api_url: str = "https://test-epay.halykbank.kz"
+    halyk_test_mode: bool = True
+    halyk_webhook_secret: Optional[str] = None
 
     # --- Уведомления о бронированиях ---
     # Telegram-бот для уведомлений турагентствам.

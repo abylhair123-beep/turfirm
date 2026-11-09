@@ -184,15 +184,18 @@ def test_reviews():
     assert any(r["authorName"] == "Нурлан" for r in reviews)
 
 
-# --- Тесты платежной системы Kaspi Pay ---
+# --- Тесты платежной системы Kaspi Pay и Halyk Bank ---
 
-def test_kaspi_payment_config_status():
+def test_payment_config_status():
     res = client.get("/api/v1/payments/config-status")
     assert res.status_code == 200
     data = res.json()
-    assert data["provider"] == "Kaspi Pay"
-    assert "isTestMode" in data
-    assert "apiUrl" in data
+    assert "kaspi" in data
+    assert "halyk" in data
+    assert "compliance" in data
+    assert data["kaspi"]["isTestMode"] is True
+    assert data["halyk"]["isTestMode"] is True
+    assert "ready_for_bank_review" in data["compliance"]["status"]
 
 
 def test_initiate_and_confirm_kaspi_payment():
@@ -221,6 +224,7 @@ def test_initiate_and_confirm_kaspi_payment():
     assert pay_data["bookingId"] == booking_id
     assert pay_data["provider"] == "kaspi"
     assert "kaspi.kz" in pay_data["paymentUrl"]
+    assert "kaspi://" in pay_data["deeplinkUrl"]
     assert pay_data["qrCodeData"] is not None
     assert pay_data["status"] == "pending"
 
@@ -266,6 +270,87 @@ def test_kaspi_webhook():
     })
     assert webhook_res.status_code == 200
     assert webhook_res.json()["status"] == "success"
+
+
+def test_halyk_epay_and_webhook_flow():
+    # 1. Создаем бронь с оплатой через Halyk Bank
+    b_res = client.post("/api/v1/bookings", json={
+        "tourId": "dubai-5n",
+        "customerName": "Нурлан Султанов",
+        "customerPhone": "+7 701 444 33 22",
+        "customerEmail": "nurlan@halyk.kz",
+        "guestsCount": 2,
+        "paymentMethod": "Halyk Bank",
+    })
+    assert b_res.status_code == 201
+    booking_id = b_res.json()["id"]
+
+    # 2. Инициируем платеж через Halyk E-Pay
+    pay_res = client.post("/api/v1/payments/initiate", json={
+        "bookingId": booking_id,
+        "paymentMethod": "Halyk Bank",
+    })
+    assert pay_res.status_code == 201
+    pay_data = pay_res.json()
+    payment_id = pay_data["paymentId"]
+    assert pay_data["provider"] == "halyk"
+    assert "epay.halykbank.kz" in pay_data["paymentUrl"]
+    assert "homebank://" in pay_data["deeplinkUrl"]
+    assert pay_data["status"] == "pending"
+
+    # 3. Эмулируем входящий вебхук от Halyk E-Pay после оплаты картой / Apple Pay
+    webhook_res = client.post("/api/v1/payments/halyk/webhook", json={
+        "invoiceId": payment_id,
+        "orderId": booking_id,
+        "status": "confirmed",
+        "amount": 350000 * 2,
+        "currency": "KZT",
+        "approvalCode": "HALYK123456",
+    })
+    assert webhook_res.status_code == 200
+    assert webhook_res.json()["result"] == "ok"
+    assert webhook_res.json()["status"] == "success"
+
+    # 4. Проверяем, что бронь стала 'paid'
+    check_booking = client.get(f"/api/v1/bookings/{booking_id}")
+    assert check_booking.status_code == 200
+    assert check_booking.json()["status"] == "paid"
+
+
+def test_payment_refund_flow():
+    # 1. Создаем бронь и оплачиваем
+    b_res = client.post("/api/v1/bookings", json={
+        "tourId": "antalya-7n",
+        "customerName": "Айгерим",
+        "customerPhone": "+7 777 555 44 33",
+        "customerEmail": "aigerim@gmail.com",
+        "guestsCount": 1,
+        "paymentMethod": "Kaspi Pay",
+    })
+    assert b_res.status_code == 201
+    booking_id = b_res.json()["id"]
+
+    pay_res = client.post("/api/v1/payments/initiate", json={
+        "bookingId": booking_id,
+        "paymentMethod": "Kaspi Pay",
+    })
+    payment_id = pay_res.json()["paymentId"]
+
+    # Подтверждаем оплату
+    client.post(f"/api/v1/payments/{payment_id}/confirm")
+
+    # 2. Оформляем возврат (Refund)
+    refund_res = client.post(f"/api/v1/payments/{payment_id}/refund", json={
+        "reason": "Аннуляция тура за 15 дней до вылета (полный возврат)",
+    })
+    assert refund_res.status_code == 200
+    refund_data = refund_res.json()
+    assert refund_data["status"] == "refunded"
+    assert refund_data["paymentId"] == payment_id
+
+    # 3. Проверяем статус бронирования — перешло в 'cancelled'
+    b_check = client.get(f"/api/v1/bookings/{booking_id}")
+    assert b_check.json()["status"] == "cancelled"
 
 
 def test_agency_stats():

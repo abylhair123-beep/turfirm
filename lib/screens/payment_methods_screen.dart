@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'legal_docs_screen.dart';
 
 class SavedCardItem {
   SavedCardItem({
@@ -51,6 +53,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   String _selectedMethod = 'kaspi'; // 'kaspi', 'halyk', 'cards', 'installment'
   List<SavedCardItem> _cards = [];
+  Map<String, dynamic>? _gatewayStatus;
   bool _isLoading = true;
 
   @override
@@ -89,13 +92,16 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           ),
         ];
       }
+      final gatewayStatus = await ApiService.getPaymentConfigStatus();
+      if (!mounted) return;
       setState(() {
         _selectedMethod = method;
         _cards = loadedCards;
+        _gatewayStatus = gatewayStatus;
         _isLoading = false;
       });
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -434,6 +440,70 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           : ListView(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               children: [
+                // Банковские шлюзы и комплаенс
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.verified_rounded, color: AppColors.teal, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Банковские шлюзы РК подключены',
+                              style: AppText.sora(size: 14, weight: FontWeight.w700, color: Colors.white),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _gatewayStatus != null
+                            ? 'Прямая интеграция: Kaspi Pay (${_gatewayStatus!['kaspi']?['isTestMode'] == true ? 'Тестовый Sandbox' : 'Боевой API'}) и Halyk Bank (${_gatewayStatus!['halyk']?['isTestMode'] == true ? 'Тестовый Sandbox' : 'Боевой API'}). Документы готовы к банковскому аудиту.'
+                            : 'Прямая интеграция с Kaspi Pay (QR / Red / 0-0-12) и Halyk Bank E-Pay (Visa / MasterCard / Apple Pay). Тестовый контур активен, комплаенс-документы подготовлены для аудита банков.',
+                        style: AppText.work(size: 12, color: const Color(0xFF94A3B8)).copyWith(height: 1.4),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF14635).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFF14635).withValues(alpha: 0.4)),
+                            ),
+                            child: const Text('Kaspi Pay Sandbox', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF007A33).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFF007A33).withValues(alpha: 0.4)),
+                            ),
+                            child: const Text('Halyk E-Pay Sandbox', style: TextStyle(color: Color(0xFF86EFAC), fontSize: 11, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Платежные сервисы Казахстана
                 Text('Быстрая оплата в Казахстане', style: AppText.sora(size: 15, weight: FontWeight.w700)),
                 const SizedBox(height: 12),
@@ -652,9 +722,74 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
+
+                // Юридическая информация и комплаенс
+                Text('Юридическая информация для банков и клиентов', style: AppText.sora(size: 14, weight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                _legalButton(
+                  title: 'Публичная оферта и договор туруслуг',
+                  subtitle: 'Соответствие Закону РК № 211-II «О туристской деятельности»',
+                  icon: Icons.description_outlined,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.offer)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _legalButton(
+                  title: 'Политика возврата и аннуляции броней',
+                  subtitle: 'Регламент возврата средств на Kaspi Gold и карты Halyk Bank',
+                  icon: Icons.assignment_return_outlined,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.refund)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _legalButton(
+                  title: 'Политика конфиденциальности и защита ПДН',
+                  subtitle: 'Закон РК № 94-V «О персональных данных и их защите»',
+                  icon: Icons.privacy_tip_outlined,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.privacy)),
+                  ),
+                ),
+                const SizedBox(height: 24),
               ],
             ),
+    );
+  }
+
+  Widget _legalButton({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          leading: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.teal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.teal, size: 20),
+          ),
+          title: Text(title, style: AppText.sora(size: 13, weight: FontWeight.w600)),
+          subtitle: Text(subtitle, style: AppText.work(size: 11, color: AppColors.muted)),
+          trailing: const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.muted, size: 14),
+        ),
+      ),
     );
   }
 
@@ -725,16 +860,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             ],
           ),
           subtitle: Text(subtitle, style: AppText.work(size: 11.5, color: AppColors.muted)),
-          trailing: Radio<String>(
-            value: id,
-            groupValue: _selectedMethod,
-            activeColor: AppColors.teal,
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _selectedMethod = val);
-                _saveCards();
-              }
-            },
+          trailing: Icon(
+            isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+            color: isSelected ? AppColors.teal : AppColors.muted,
           ),
         ),
       ),

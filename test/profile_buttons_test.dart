@@ -64,5 +64,29 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(SupportCareScreen), findsOneWidget);
+
+    // Pop back
+    Navigator.of(tester.element(find.byType(SupportCareScreen))).pop();
+    await tester.pumpAndSettle();
+
+    // 4. Legal information tile
+    expect(find.text('Правовая информация & Оферта'), findsOneWidget);
+    await tester.ensureVisible(find.text('Правовая информация & Оферта'));
+    await tester.tap(find.text('Правовая информация & Оферта'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Правовая информация'), findsOneWidget);
+    expect(find.text('Публичная оферта'), findsOneWidget);
+    expect(find.text('Возврат & Аннуляция'), findsOneWidget);
+    expect(find.text('Конфиденциальность'), findsOneWidget);
+
+    // Switch tabs
+    await tester.tap(find.text('Возврат & Аннуляция'));
+    await tester.pumpAndSettle();
+    expect(find.text('Политика возврата и гарантии туристов'), findsOneWidget);
+
+    await tester.tap(find.text('Конфиденциальность'));
+    await tester.pumpAndSettle();
+    expect(find.text('Защита персональных данных'), findsOneWidget);
   });
 }

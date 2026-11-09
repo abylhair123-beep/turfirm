@@ -13,6 +13,7 @@ import 'bookings_list_screen.dart';
 import 'create_tour_screen.dart';
 import 'crm_calls_screen.dart';
 import 'favorites_screen.dart';
+import 'legal_docs_screen.dart';
 import 'notification_settings_screen.dart';
 import 'partner_dashboard_screen.dart';
 import 'payment_methods_screen.dart';
@@ -210,6 +211,16 @@ class _UnauthenticatedView extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const LegalDocsScreen()),
+              );
+            },
+            icon: const Icon(Icons.gavel_rounded, size: 15, color: AppColors.muted),
+            label: const Text('Публичная оферта и возврат средств', style: TextStyle(color: AppColors.muted, fontSize: 12)),
           ),
         ],
       ),
@@ -714,6 +725,17 @@ class _AuthenticatedView extends StatelessWidget {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SupportCareScreen()),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+        _menuTile(
+          icon: Icons.gavel_rounded,
+          title: 'Правовая информация & Оферта',
+          subtitle: 'Публичный договор, возврат средств и ПДН',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LegalDocsScreen()),
             );
           },
         ),

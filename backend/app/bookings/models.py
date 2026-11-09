@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import uuid
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -30,6 +30,13 @@ class Booking(Base):
     referral_code = Column(String(50), nullable=True, index=True)
     referral_reward = Column(Integer, default=0, nullable=False)
     referral_partner_id = Column(String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True)
+
+    # Юридический комплаенс РК (Оферта, ПДН, Туркод)
+    terms_accepted = Column(Boolean, default=True, nullable=False)
+    terms_accepted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    tour_code = Column(String(50), nullable=True)
+    client_ip = Column(String(50), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships

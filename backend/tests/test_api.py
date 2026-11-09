@@ -1331,6 +1331,44 @@ def test_agency_b2b_portal_full_endpoints():
     assert del_res.status_code == 204
 
 
+def test_legal_compliance_and_tour_code_flow():
+    """Тест юридического комплаенса: обязательный акцепт оферты и генерация Туркода."""
+    # 1. Попытка бронирования без акцепта оферты (termsAccepted=False) -> HTTP 400
+    reject_res = client.post("/api/v1/bookings", json={
+        "tourId": "antalya-7n",
+        "customerName": "Отказник Без Оферты",
+        "customerPhone": "+7 701 000 00 00",
+        "customerEmail": "no-terms@sapar.kz",
+        "guestsCount": 1,
+        "paymentMethod": "Kaspi Pay",
+        "termsAccepted": False,
+    })
+    assert reject_res.status_code == 400
+    assert "публичной оферты" in reject_res.json()["detail"].lower()
+
+    # 2. Успешное бронирование с принятием оферты (termsAccepted=True) -> HTTP 201 + Туркод
+    accept_res = client.post("/api/v1/bookings", json={
+        "tourId": "antalya-7n",
+        "customerName": "Добросовестный Турист",
+        "customerPhone": "+7 701 111 22 33",
+        "customerEmail": "accepted-terms@sapar.kz",
+        "guestsCount": 2,
+        "paymentMethod": "Kaspi Pay",
+        "termsAccepted": True,
+    })
+    assert accept_res.status_code == 201
+    booking_data = accept_res.json()
+    assert booking_data["termsAccepted"] is True
+    assert "tourCode" in booking_data
+    assert booking_data["tourCode"].startswith("TK-KZ-2026-")
+
+    # 3. Генерация PDF-ваучера с Туркодом и юридической информацией
+    voucher_res = client.get(f"/api/v1/bookings/{booking_data['id']}/voucher.pdf")
+    assert voucher_res.status_code == 200
+    assert voucher_res.headers["content-type"] == "application/pdf"
+    assert len(voucher_res.content) > 1000
+
+
 
 
 

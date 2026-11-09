@@ -753,6 +753,15 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.privacy)),
                   ),
                 ),
+                const SizedBox(height: 8),
+                _legalButton(
+                  title: 'Правила авиаперевозок, багаж & Туркод',
+                  subtitle: 'Приказ МИИР РК № 540 и Система гарантирования прав «Туристік Қамқор»',
+                  icon: Icons.flight_takeoff_rounded,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.aviation)),
+                  ),
+                ),
                 const SizedBox(height: 24),
               ],
             ),

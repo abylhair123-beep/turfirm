@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
+import 'legal_docs_screen.dart';
 
 class TicketsScreen extends StatefulWidget {
   final String initialTransportType; // 'all', 'flight', 'train'
@@ -944,6 +945,7 @@ class _TicketBookingSheetState extends State<_TicketBookingSheet> {
 
   String _paymentMethod = 'Kaspi Pay';
   bool _isSubmitting = false;
+  bool _termsAccepted = true;
 
   @override
   void dispose() {
@@ -963,6 +965,16 @@ class _TicketBookingSheetState extends State<_TicketBookingSheet> {
     if (name.isEmpty || phone.isEmpty || email.isEmpty || doc.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Пожалуйста, заполните все данные пассажира')),
+      );
+      return;
+    }
+
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Для оформления билета требуется подтвердить согласие с Правилами перевозки и обработкой ПДН'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
       );
       return;
     }
@@ -1113,7 +1125,74 @@ class _TicketBookingSheetState extends State<_TicketBookingSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _termsAccepted ? const Color(0xFFF8FAFC) : const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _termsAccepted ? AppColors.border : const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Checkbox(
+                      value: _termsAccepted,
+                      activeColor: AppColors.teal,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 11, color: AppColors.ink, height: 1.4),
+                          children: [
+                            const TextSpan(text: 'Согласен(на) с '),
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.baseline,
+                              baseline: TextBaseline.alphabetic,
+                              child: GestureDetector(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.aviation)),
+                                ),
+                                child: const Text(
+                                  'Правилами перевозки (Приказ № 540)',
+                                  style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline, fontSize: 11),
+                                ),
+                              ),
+                            ),
+                            const TextSpan(text: ', условиями невозвратных тарифов и '),
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.baseline,
+                              baseline: TextBaseline.alphabetic,
+                              child: GestureDetector(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const LegalDocsScreen(initialDoc: LegalDocType.privacy)),
+                                ),
+                                child: const Text(
+                                  'обработкой ПДН',
+                                  style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.bold, decoration: TextDecoration.underline, fontSize: 11),
+                                ),
+                              ),
+                            ),
+                            const TextSpan(text: ' по закону РК № 94-V.'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
 
             SizedBox(
               width: double.infinity,

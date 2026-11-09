@@ -7,6 +7,7 @@ class BookingRequest {
     required this.guestsCount,
     required this.paymentMethod,
     this.referralCode,
+    this.termsAccepted = true,
   });
 
   final String tourId;
@@ -16,6 +17,7 @@ class BookingRequest {
   final int guestsCount;
   final String paymentMethod;
   final String? referralCode;
+  final bool termsAccepted;
 
   Map<String, dynamic> toJson() {
     return {
@@ -25,6 +27,7 @@ class BookingRequest {
       'customerEmail': customerEmail,
       'guestsCount': guestsCount,
       'paymentMethod': paymentMethod,
+      'termsAccepted': termsAccepted,
       if (referralCode != null && referralCode!.trim().isNotEmpty)
         'referralCode': referralCode!.trim().toUpperCase(),
     };
@@ -47,6 +50,8 @@ class BookingResult {
     required this.status,
     this.referralCode,
     this.referralReward = 0,
+    this.tourCode,
+    this.termsAccepted = true,
     required this.createdAt,
   });
 
@@ -64,6 +69,8 @@ class BookingResult {
   final String status;
   final String? referralCode;
   final int referralReward;
+  final String? tourCode;
+  final bool termsAccepted;
   final DateTime createdAt;
 
   factory BookingResult.fromJson(Map<String, dynamic> json) {
@@ -82,6 +89,8 @@ class BookingResult {
       status: json['status'] as String? ?? 'paid',
       referralCode: json['referralCode'] as String? ?? json['referral_code'] as String?,
       referralReward: (json['referralReward'] as num? ?? json['referral_reward'] as num?)?.toInt() ?? 0,
+      tourCode: json['tourCode'] as String? ?? json['tour_code'] as String?,
+      termsAccepted: json['termsAccepted'] as bool? ?? json['terms_accepted'] as bool? ?? true,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),

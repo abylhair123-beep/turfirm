@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+import secrets
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.agencies.models import Agency
@@ -58,6 +59,8 @@ def _booking_to_response(b: Booking) -> BookingResponse:
         internalNotes=getattr(b, "internal_notes", None),
         referralCode=b.referral_code,
         referralReward=b.referral_reward or 0,
+        termsAccepted=getattr(b, "terms_accepted", True),
+        tourCode=getattr(b, "tour_code", None),
         createdAt=b.created_at,
     )
 
@@ -66,9 +69,16 @@ def _booking_to_response(b: Booking) -> BookingResponse:
 def create_booking(
     booking_in: BookingCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
+    if not booking_in.terms_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Для оформления бронирования требуется безоговорочное принятие условий публичной оферты и согласие на обработку персональных данных (Законы РК № 211-II и № 94-V)",
+        )
+
     tour = db.query(Tour).filter(Tour.id == booking_in.tour_id).first()
     if not tour:
         raise HTTPException(
@@ -107,6 +117,10 @@ def create_booking(
             referral_partner.balance += referral_reward
             db.add(referral_partner)
 
+    # Генерация официального Туркода фонда «Туристік Қамқор»
+    official_tour_code = f"TK-KZ-2026-{secrets.token_hex(4).upper()}"
+    client_ip = request.client.host if request and request.client else None
+
     booking = Booking(
         tour_id=tour.id,
         agency_id=tour.agency_id,
@@ -123,6 +137,10 @@ def create_booking(
         referral_code=referral_partner.code if referral_partner else referral_code,
         referral_reward=referral_reward,
         referral_partner_id=referral_partner.id if referral_partner else None,
+        terms_accepted=True,
+        terms_accepted_at=datetime.now(timezone.utc),
+        tour_code=official_tour_code,
+        client_ip=client_ip,
     )
     db.add(booking)
 

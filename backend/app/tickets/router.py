@@ -106,6 +106,12 @@ def book_ticket(
     db: Session = Depends(get_db),
 ):
     """Оформление и мгновенная оплата электронного билета (Kaspi Pay / Карты)."""
+    if not payload.terms_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Для покупки билета требуется согласие с Правилами перевозки и обработкой персональных данных (Закон РК № 94-V)",
+        )
+
     flight = db.query(TicketFlight).filter(TicketFlight.id == payload.flight_id).first()
     if not flight:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Выбранный рейс не найден")

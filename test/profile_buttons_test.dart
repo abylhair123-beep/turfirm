@@ -75,18 +75,22 @@ void main() {
     await tester.tap(find.text('Правовая информация & Оферта'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Правовая информация'), findsOneWidget);
+    expect(find.text('Правовая информация & Оферта'), findsWidgets);
     expect(find.text('Публичная оферта'), findsOneWidget);
-    expect(find.text('Возврат & Аннуляция'), findsOneWidget);
-    expect(find.text('Конфиденциальность'), findsOneWidget);
+    expect(find.text('Возврат & Аннуляция (ФПР)'), findsOneWidget);
+    expect(find.text('Согласие на сбор и передачу ПДН'), findsOneWidget);
+    expect(find.text('Авиаперевозка & Туркод'), findsOneWidget);
 
     // Switch tabs
-    await tester.tap(find.text('Возврат & Аннуляция'));
+    await tester.tap(find.text('Возврат & Аннуляция (ФПР)'));
     await tester.pumpAndSettle();
-    expect(find.text('Политика возврата и гарантии туристов'), findsOneWidget);
+    expect(find.text('Регламент аннуляции, отказа от тура и фактически понесенных расходов (ФПР)'), findsOneWidget);
 
-    await tester.tap(find.text('Конфиденциальность'));
+    // Scroll TabBar to reveal the 3rd tab and tap it
+    await tester.ensureVisible(find.text('Согласие на сбор и передачу ПДН'));
     await tester.pumpAndSettle();
-    expect(find.text('Защита персональных данных'), findsOneWidget);
+    await tester.tap(find.text('Согласие на сбор и передачу ПДН'));
+    await tester.pumpAndSettle();
+    expect(find.text('Согласие субъекта на сбор, обработку и трансграничную передачу персональных данных'), findsOneWidget);
   });
 }

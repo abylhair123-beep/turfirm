@@ -40,6 +40,7 @@ class TicketBookingCreate(BaseModel):
     document_number: str = Field(..., description="ИИН (для РК) или номер загранпаспорта")
     passengers_count: int = Field(1, ge=1, le=9, description="Количество пассажиров")
     payment_method: str = Field("Kaspi Pay", description="Kaspi Pay, Картой Visa/Mastercard, Halyk Bank")
+    terms_accepted: bool = Field(True, description="Согласие с правилами перевозок и обработкой ПДН")
 
 
 class TicketBookingResponse(BaseModel):

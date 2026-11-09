@@ -9,6 +9,7 @@ import '../widgets/app_icon.dart';
 import '../widgets/icon_circle_button.dart';
 import '../widgets/kaspi_qr_sheet.dart';
 import '../widgets/primary_button.dart';
+import 'legal_docs_screen.dart';
 import 'success_screen.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -38,6 +39,7 @@ class _BookingScreenState extends State<BookingScreen> {
   String? _referralBloggerName;
   double _referralDiscountPercent = 0.0;
   bool _isCheckingReferral = false;
+  bool _termsAccepted = true;
 
   static const _paymentMethods = ['Kaspi Pay', 'Карта', 'Halyk Bank'];
   static const _serviceFee = 9800;
@@ -153,6 +155,16 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Для оформления брони требуется согласие с Публичной офертой и обработкой ПДН'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -165,6 +177,7 @@ class _BookingScreenState extends State<BookingScreen> {
         guestsCount: _guests,
         paymentMethod: method,
         referralCode: _appliedReferralCode,
+        termsAccepted: _termsAccepted,
       );
 
       final result = await ApiService.createBooking(req);
@@ -526,6 +539,8 @@ class _BookingScreenState extends State<BookingScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  _buildLegalAcceptanceCard(),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -657,6 +672,145 @@ class _BookingScreenState extends State<BookingScreen> {
         Text(label, style: AppText.work(size: 13, color: AppColors.muted)),
         Text(value, style: AppText.work(size: 13.5, weight: FontWeight.w600, color: AppColors.ink)),
       ],
+    );
+  }
+
+  void _openLegalDoc(LegalDocType doc) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LegalDocsScreen(initialDoc: doc),
+      ),
+    );
+  }
+
+  Widget _legalPill(String title, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegalAcceptanceCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _termsAccepted ? const Color(0xFFF8FAFC) : const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _termsAccepted ? AppColors.border : const Color(0xFFFDE68A),
+          width: _termsAccepted ? 1 : 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: Checkbox(
+                  value: _termsAccepted,
+                  activeColor: AppColors.teal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: (val) => setState(() => _termsAccepted = val ?? false),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+                  child: RichText(
+                    text: TextSpan(
+                      style: AppText.work(size: 12, color: AppColors.ink).copyWith(height: 1.45),
+                      children: [
+                        const TextSpan(text: 'Я ознакомлен(а) и безоговорочно принимаю условия '),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: GestureDetector(
+                            onTap: () => _openLegalDoc(LegalDocType.offer),
+                            child: const Text(
+                              'Публичной оферты',
+                              style: TextStyle(
+                                color: AppColors.teal,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const TextSpan(text: ', '),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: GestureDetector(
+                            onTap: () => _openLegalDoc(LegalDocType.refund),
+                            child: const Text(
+                              'Правил возврата и ФПР',
+                              style: TextStyle(
+                                color: AppColors.teal,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const TextSpan(text: ', и даю '),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: GestureDetector(
+                            onTap: () => _openLegalDoc(LegalDocType.privacy),
+                            child: const Text(
+                              'Согласие на трансграничную передачу ПДН',
+                              style: TextStyle(
+                                color: AppColors.teal,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const TextSpan(text: ' по законам РК № 211-II и № 94-V.'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(left: 32),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                _legalPill('🛡️ Фонд «Туристік Қамқор» (Туркод)', () => _openLegalDoc(LegalDocType.aviation)),
+                _legalPill('⚖️ Страхование Nomad Insurance', () => _openLegalDoc(LegalDocType.offer)),
+                _legalPill('✈️ Правила чартеров (Приказ № 540)', () => _openLegalDoc(LegalDocType.aviation)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

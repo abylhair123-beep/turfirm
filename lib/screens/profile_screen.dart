@@ -7,6 +7,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/primary_button.dart';
 import 'admin_finance_screen.dart';
 import 'agency_dashboard_screen.dart';
+import 'agency_desktop_portal_screen.dart';
 import 'auth_screen.dart';
 import 'bookings_list_screen.dart';
 import 'create_tour_screen.dart';
@@ -506,6 +507,31 @@ class _AuthenticatedView extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: const BorderSide(color: Colors.white54),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AgencyDesktopPortalScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 18),
+                    label: const Text(
+                      '🖥️ Отдельный Десктоп-портал (B2B Web)',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.28),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.white70),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                     ),

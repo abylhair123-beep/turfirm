@@ -1,23 +1,46 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.agencies.excel_export import generate_tourists_manifest_xlsx
-from app.agencies.models import Agency
-from app.agencies.schemas import AgencyCreate, AgencyResponse, AgencyUpdate
+from app.agencies.models import Agency, AgencyPayoutRequest
+from app.agencies.schemas import (
+    AgencyBookingStatusUpdate,
+    AgencyCreate,
+    AgencyFinanceSummaryResponse,
+    AgencyPayoutRequestCreate,
+    AgencyPayoutResponse,
+    AgencyProfileUpdate,
+    AgencyResponse,
+    AgencyUpdate,
+)
 from app.auth.models import User
 from app.bookings.models import Booking
 from app.bookings.router import _booking_to_response
 from app.bookings.schemas import BookingResponse
+from app.core.audit import log_audit_event
 from app.database import get_db
 from app.dependencies import get_current_agency_user, get_current_user
 from app.tours.models import Tour
 from app.tours.router import _tour_to_response
-from app.tours.schemas import TourResponse
+from app.tours.schemas import TourCreate, TourResponse, TourUpdate
 
 router = APIRouter(prefix="/agencies", tags=["Турагентства"])
+
+
+def _get_user_agency(current_user: User, db: Session) -> Agency:
+    agency = current_user.agency
+    if not agency and current_user.role == "admin":
+        agency = db.query(Agency).first()
+    if not agency:
+        raise HTTPException(
+            status_code=404,
+            detail="Турагентство для данного пользователя не найдено",
+        )
+    return agency
 
 
 # --- Личный кабинет турагентства (/agencies/me/...) ---
@@ -28,9 +51,31 @@ def get_my_agency_profile(
     db: Session = Depends(get_db),
 ):
     """Профиль турагентства текущего авторизованного менеджера."""
-    agency = current_user.agency
-    if not agency:
-        raise HTTPException(status_code=404, detail="Турагентство для данного пользователя не найдено")
+    return _get_user_agency(current_user, db)
+
+
+@router.put("/me/profile", response_model=AgencyResponse)
+def update_my_agency_profile(
+    profile_in: AgencyProfileUpdate,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Обновление контактных и банковских реквизитов агентства (БИН, IBAN, адрес, контакты)."""
+    agency = _get_user_agency(current_user, db)
+    update_data = profile_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(agency, field):
+            setattr(agency, field, value)
+    db.commit()
+    db.refresh(agency)
+    log_audit_event(
+        db,
+        action="AGENCY_PROFILE_UPDATED",
+        resource="agencies",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        details={"agency_id": agency.id, "agency_name": agency.name},
+    )
     return agency
 
 
@@ -85,6 +130,275 @@ def get_my_agency_tours(
         return []
     tours = db.query(Tour).filter(Tour.agency_id == agency.id).order_by(Tour.created_at.desc()).all()
     return [_tour_to_response(t) for t in tours]
+
+
+@router.post("/me/tours", response_model=TourResponse, status_code=status.HTTP_201_CREATED)
+def create_agency_tour(
+    tour_in: TourCreate,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Создание тура текущим турагентством (B2B портал)."""
+    agency = _get_user_agency(current_user, db)
+    tour_id = tour_in.id or f"tour-{uuid.uuid4().hex[:8]}"
+    meta = tour_in.meta or f"{tour_in.nights} · {tour_in.dates} · {tour_in.meal}"
+
+    new_tour = Tour(
+        id=tour_id,
+        agency_id=agency.id,
+        agency_name=agency.name,
+        agency_verified=agency.verified,
+        destination=tour_in.destination,
+        title=tour_in.title,
+        category=tour_in.category,
+        nights=tour_in.nights,
+        duration_nights=tour_in.duration_nights or 7,
+        dates=tour_in.dates,
+        meal=tour_in.meal,
+        meal_type=tour_in.meal_type or "AI",
+        hotel_stars=tour_in.hotel_stars or 4,
+        beach_line=tour_in.beach_line or 1,
+        departure_city=tour_in.departure_city or "Алматы",
+        meta=meta,
+        price_from=tour_in.price_from,
+        photo_color=tour_in.photo_color or "#0E7C7B",
+        photo_url=tour_in.photo_url or "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800",
+        description=tour_in.description or "",
+        included=tour_in.included or ["Перелет", "Отель", "Трансфер", "Страховка"],
+        rating=5.0,
+        reviews_count=0,
+        is_active=True,
+        old_price=tour_in.old_price,
+        is_hot=tour_in.is_hot or False,
+        seats_left=tour_in.seats_left or 20,
+        installment_months=tour_in.installment_months or 12,
+        max_guests=tour_in.max_guests or 4,
+        hotel_name=tour_in.hotel_name,
+        hotel_description=tour_in.hotel_description,
+    )
+    db.add(new_tour)
+    db.commit()
+    db.refresh(new_tour)
+
+    log_audit_event(
+        db,
+        action="AGENCY_TOUR_CREATED",
+        resource="tours",
+        user_id=current_user.id,
+        details={"tour_id": new_tour.id, "title": new_tour.title, "price": new_tour.price_from},
+    )
+    return _tour_to_response(new_tour)
+
+
+@router.put("/me/tours/{tour_id}", response_model=TourResponse)
+def update_agency_tour(
+    tour_id: str,
+    tour_update: TourUpdate,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Редактирование параметров тура текущего агентства."""
+    agency = _get_user_agency(current_user, db)
+    tour = db.query(Tour).filter(Tour.id == tour_id, Tour.agency_id == agency.id).first()
+    if not tour:
+        raise HTTPException(
+            status_code=404,
+            detail="Тур не найден или принадлежит другому агентству",
+        )
+
+    data = tour_update.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if hasattr(tour, k) and v is not None:
+            setattr(tour, k, v)
+
+    db.commit()
+    db.refresh(tour)
+
+    log_audit_event(
+        db,
+        action="AGENCY_TOUR_UPDATED",
+        resource="tours",
+        user_id=current_user.id,
+        details={"tour_id": tour.id, "title": tour.title},
+    )
+    return _tour_to_response(tour)
+
+
+@router.delete("/me/tours/{tour_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agency_tour(
+    tour_id: str,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Удаление тура текущего турагентства."""
+    agency = _get_user_agency(current_user, db)
+    tour = db.query(Tour).filter(Tour.id == tour_id, Tour.agency_id == agency.id).first()
+    if not tour:
+        raise HTTPException(
+            status_code=404,
+            detail="Тур не найден или принадлежит другому агентству",
+        )
+    db.delete(tour)
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="AGENCY_TOUR_DELETED",
+        resource="tours",
+        user_id=current_user.id,
+        details={"tour_id": tour_id},
+    )
+    return None
+
+
+@router.patch("/me/bookings/{booking_id}/status", response_model=BookingResponse)
+def update_agency_booking_status(
+    booking_id: str,
+    payload: AgencyBookingStatusUpdate,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Смена статуса бронирования менеджером агентства (Подтвержден, Ваучер выдан, Завершен, Отменен)."""
+    agency = _get_user_agency(current_user, db)
+    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.agency_id == agency.id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Бронирование не найдено в вашем агентстве")
+
+    allowed_statuses = ["new", "confirmed", "voucher_issued", "completed", "cancelled", "paid"]
+    if payload.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Недопустимый статус. Разрешены: {', '.join(allowed_statuses)}",
+        )
+
+    old_status = booking.status
+    booking.status = payload.status
+    if payload.note:
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        booking.internal_notes = (
+            (booking.internal_notes or "") + f"\n[{timestamp_str}] {payload.note}"
+        ).strip()
+
+    db.commit()
+    db.refresh(booking)
+
+    log_audit_event(
+        db,
+        action="BOOKING_STATUS_CHANGED",
+        resource="bookings",
+        user_id=current_user.id,
+        details={"booking_id": booking.id, "old_status": old_status, "new_status": payload.status},
+    )
+    return _booking_to_response(booking)
+
+
+@router.get("/me/finances", response_model=AgencyFinanceSummaryResponse)
+def get_agency_finances(
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Финансовый баланс агентства, заработанная комиссия (10%) и заявки на выплату."""
+    agency = _get_user_agency(current_user, db)
+
+    valid_bookings = db.query(Booking).filter(Booking.agency_id == agency.id, Booking.status != "cancelled").all()
+    total_sales = sum(b.total_price for b in valid_bookings)
+    commission_rate = 0.10
+    total_commission = int(total_sales * commission_rate)
+
+    payouts = db.query(AgencyPayoutRequest).filter(
+        AgencyPayoutRequest.agency_id == agency.id
+    ).order_by(AgencyPayoutRequest.created_at.desc()).all()
+
+    paid_out = sum(p.amount for p in payouts if p.status == "processed")
+    pending = sum(p.amount for p in payouts if p.status == "pending")
+    available = max(0, total_commission - paid_out - pending)
+
+    return AgencyFinanceSummaryResponse(
+        totalSalesKzt=total_sales,
+        commissionRate=commission_rate,
+        totalCommissionEarned=total_commission,
+        paidOutKzt=paid_out,
+        pendingPayoutKzt=pending,
+        availableBalanceKzt=available,
+        bankIban=agency.bank_iban,
+        bankName=agency.bank_name,
+        payoutHistory=[
+            AgencyPayoutResponse(
+                id=p.id,
+                amount=p.amount,
+                iban=p.iban,
+                bankName=p.bank_name,
+                status=p.status,
+                comment=p.comment,
+                createdAt=p.created_at,
+                processedAt=p.processed_at,
+            )
+            for p in payouts
+        ],
+    )
+
+
+@router.post("/me/payout-request", response_model=AgencyPayoutResponse, status_code=status.HTTP_201_CREATED)
+def create_payout_request(
+    payload: AgencyPayoutRequestCreate,
+    current_user: User = Depends(get_current_agency_user),
+    db: Session = Depends(get_db),
+):
+    """Подача заявки на вывод агентского комиссионного вознаграждения на IBAN-счет."""
+    agency = _get_user_agency(current_user, db)
+
+    iban = (payload.iban or agency.bank_iban or "").strip()
+    if not iban:
+        raise HTTPException(
+            status_code=400,
+            detail="Укажите номер IBAN счета (в заявке или в профиле компании)",
+        )
+
+    valid_bookings = db.query(Booking).filter(Booking.agency_id == agency.id, Booking.status != "cancelled").all()
+    total_sales = sum(b.total_price for b in valid_bookings)
+    total_commission = int(total_sales * 0.10)
+
+    payouts = db.query(AgencyPayoutRequest).filter(AgencyPayoutRequest.agency_id == agency.id).all()
+    paid_out = sum(p.amount for p in payouts if p.status == "processed")
+    pending = sum(p.amount for p in payouts if p.status == "pending")
+    available = max(0, total_commission - paid_out - pending)
+
+    if payload.amount > available:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Запрошенная сумма ({payload.amount:,} ₸) превышает доступный остаток ({available:,} ₸)",
+        )
+
+    req = AgencyPayoutRequest(
+        id=str(uuid.uuid4()),
+        agency_id=agency.id,
+        amount=payload.amount,
+        iban=iban,
+        bank_name=payload.bank_name or agency.bank_name or "Банк Казахстана",
+        status="pending",
+        comment=payload.comment,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+
+    log_audit_event(
+        db,
+        action="AGENCY_PAYOUT_REQUESTED",
+        resource="finances",
+        user_id=current_user.id,
+        details={"amount": req.amount, "iban": req.iban},
+    )
+    return AgencyPayoutResponse(
+        id=req.id,
+        amount=req.amount,
+        iban=req.iban,
+        bankName=req.bank_name,
+        status=req.status,
+        comment=req.comment,
+        createdAt=req.created_at,
+    )
 
 
 @router.get("/me/bookings", response_model=List[BookingResponse])

@@ -1257,16 +1257,17 @@ class ApiService {
   /// Создание тура (нужен токен агентства). Возвращает созданный Tour или null.
   static Future<Tour?> createTour({
     required Map<String, dynamic> data,
-    required String token,
+    String? token,
   }) async {
     try {
+      final authToken = token ?? _token ?? '';
       final uri = Uri.parse('$baseUrl/tours');
       final response = await http
           .post(
             uri,
             headers: {
               'Content-Type': 'application/json; charset=utf-8',
-              'Authorization': 'Bearer $token',
+              'Authorization': 'Bearer $authToken',
             },
             body: jsonEncode(data),
           )
@@ -1403,6 +1404,92 @@ class ApiService {
       return '$baseUrl/agencies/me/bookings/export-xlsx?status=$status';
     }
     return '$baseUrl/agencies/me/bookings/export-xlsx';
+  }
+
+  /// Профиль турагентства и реквизиты компании
+  static Future<Map<String, dynamic>?> getAgencyProfile() async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/profile');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAgencyProfile error: $e');
+    }
+    return null;
+  }
+
+  /// Обновление контактных и банковских реквизитов компании
+  static Future<Map<String, dynamic>?> updateAgencyProfile(Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/profile');
+      final response = await http
+          .put(uri, headers: _headers(), body: jsonEncode(data))
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] updateAgencyProfile error: $e');
+    }
+    return null;
+  }
+
+  /// Финансовый баланс, заработанная 10% комиссия и история выплат агентства
+  static Future<Map<String, dynamic>?> getAgencyFinances() async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/finances');
+      final response = await http.get(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] getAgencyFinances error: $e');
+    }
+    return null;
+  }
+
+  /// Запрос на вывод комиссионного вознаграждения на IBAN счет
+  static Future<Map<String, dynamic>?> createAgencyPayoutRequest({
+    required int amount,
+    String? iban,
+    String? bankName,
+    String? comment,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/payout-request');
+      final response = await http
+          .post(
+            uri,
+            headers: _headers(),
+            body: jsonEncode({
+              'amount': amount,
+              if (iban != null) 'iban': iban,
+              if (bankName != null) 'bankName': bankName,
+              if (comment != null) 'comment': comment,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode == 201) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[ApiService] createAgencyPayoutRequest error: $e');
+    }
+    return null;
+  }
+
+  /// Удаление тура из каталога агентства
+  static Future<bool> deleteAgencyTour(String tourId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/agencies/me/tours/$tourId');
+      final response = await http.delete(uri, headers: _headers()).timeout(const Duration(seconds: 6));
+      return response.statusCode == 204 || response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] deleteAgencyTour error: $e');
+    }
+    return false;
   }
 
   // ==================== РЕФЕРАЛЬНАЯ ПРОГРАММА ДЛЯ БЛОГЕРОВ ====================

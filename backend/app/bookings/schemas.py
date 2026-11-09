@@ -34,6 +34,7 @@ class BookingResponse(BaseModel):
     service_fee: int = Field(alias="serviceFee")
     total_price: int = Field(alias="totalPrice")
     status: str
+    internal_notes: Optional[str] = Field(default=None, alias="internalNotes")
     referral_code: Optional[str] = Field(default=None, alias="referralCode")
     referral_reward: Optional[int] = Field(default=0, alias="referralReward")
     created_at: datetime = Field(alias="createdAt")

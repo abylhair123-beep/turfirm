@@ -18,7 +18,7 @@ void main() {
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    ApiService.userNotifier.value = AppUser(
+    ApiService.userNotifier.value = const AppUser(
       id: '1',
       email: 'test@sapar.kz',
       fullName: 'Тестовый Пользователь',

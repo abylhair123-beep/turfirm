@@ -55,6 +55,7 @@ def _booking_to_response(b: Booking) -> BookingResponse:
         serviceFee=b.service_fee,
         totalPrice=b.total_price,
         status=b.status,
+        internalNotes=getattr(b, "internal_notes", None),
         referralCode=b.referral_code,
         referralReward=b.referral_reward or 0,
         createdAt=b.created_at,

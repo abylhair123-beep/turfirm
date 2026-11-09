@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import uuid
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -26,6 +26,7 @@ class Booking(Base):
     total_price = Column(Integer, nullable=False)
 
     status = Column(String(30), default="paid", nullable=False)  # "pending", "confirmed", "paid", "cancelled"
+    internal_notes = Column(Text, nullable=True)
     referral_code = Column(String(50), nullable=True, index=True)
     referral_reward = Column(Integer, default=0, nullable=False)
     referral_partner_id = Column(String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True)

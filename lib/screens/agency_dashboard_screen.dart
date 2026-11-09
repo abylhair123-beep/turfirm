@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'agency_desktop_portal_screen.dart';
 import 'create_tour_screen.dart';
 import 'crm_calls_screen.dart';
 
@@ -217,6 +218,15 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> with Sing
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.desktop_windows_rounded, color: AppColors.teal),
+            tooltip: 'Десктоп-портал для компаний',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AgencyDesktopPortalScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.headset_mic_rounded, color: AppColors.teal),
             tooltip: 'Мини-CRM & Обзвон',

@@ -1136,6 +1136,117 @@ def test_cybersecurity_admin_audit_logs():
     assert "status" in first_item
 
 
+# ==================== ЭПИК 4: ПОЛНЫЙ НАБОР B2B-ЭНДПОИНТОВ ДЛЯ ТУРФИРМ ====================
+
+def test_agency_b2b_portal_full_endpoints():
+    """Тест полного набора B2B-эндпоинтов для десктоп-портала:
+    - Профиль компании и реквизиты (GET/PUT /agencies/me/profile)
+    - Управление каталогом туров (POST/PUT/DELETE /agencies/me/tours)
+    - Управление бронированиями и статусами (PATCH /agencies/me/bookings/{id}/status)
+    - Финансовый баланс, комиссия 10% и заявка на выплату (GET /agencies/me/finances, POST /agencies/me/payout-request)
+    """
+    # 1. Логин как менеджер турагентства
+    login_res = client.post("/api/v1/auth/login", json={"email": "turan@sapar.kz", "password": "Agency123!"})
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    agency_headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Получение и обновление реквизитов агентства
+    profile_res = client.get("/api/v1/agencies/me/profile", headers=agency_headers)
+    assert profile_res.status_code == 200
+    profile_data = profile_res.json()
+    assert "id" in profile_data
+
+    update_payload = {
+        "binIin": "990102300456",
+        "legalAddress": "г. Алматы, пр. Достык, 180, офис 401",
+        "bankName": "Kaspi Bank",
+        "bankIban": "KZ123456789012345678",
+        "bankBic": "CASPKZKA",
+        "contactPerson": "Арман Касымов",
+        "phone": "+7 701 555 1234",
+    }
+    put_res = client.put("/api/v1/agencies/me/profile", json=update_payload, headers=agency_headers)
+    assert put_res.status_code == 200
+    updated_profile = put_res.json()
+    assert updated_profile["binIin"] == "990102300456"
+    assert updated_profile["bankIban"] == "KZ123456789012345678"
+
+    # 3. Создание нового тура агентством
+    new_tour_payload = {
+        "title": "B2B Эксклюзив: Бодрум Премиум 5★",
+        "destination": "Бодрум, Турция",
+        "category": "beach",
+        "nights": "8 ночей",
+        "durationNights": 8,
+        "dates": "15.07 - 23.07",
+        "meal": "Ultra All Inclusive",
+        "hotelStars": 5,
+        "beachLine": 1,
+        "departureCity": "Алматы",
+        "priceFrom": 490000,
+        "seatsLeft": 15,
+        "description": "Эксклюзивный тур для семейного отдыха",
+    }
+    create_tour_res = client.post("/api/v1/agencies/me/tours", json=new_tour_payload, headers=agency_headers)
+    assert create_tour_res.status_code == 201
+    created_tour = create_tour_res.json()
+    tour_id = created_tour["id"]
+    assert created_tour["title"] == new_tour_payload["title"]
+    assert created_tour["priceFrom"] == 490000
+
+    # 4. Редактирование тура
+    edit_tour_res = client.put(f"/api/v1/agencies/me/tours/{tour_id}", json={"priceFrom": 465000, "seatsLeft": 12}, headers=agency_headers)
+    assert edit_tour_res.status_code == 200
+    assert edit_tour_res.json()["priceFrom"] == 465000
+    assert edit_tour_res.json()["seatsLeft"] == 12
+
+    # 5. Получение бронирований агентства
+    bookings_res = client.get("/api/v1/agencies/me/bookings", headers=agency_headers)
+    assert bookings_res.status_code == 200
+    bookings = bookings_res.json()
+    if len(bookings) > 0:
+        target_booking = bookings[0]
+        # 6. Смена статуса бронирования
+        patch_res = client.patch(
+            f"/api/v1/agencies/me/bookings/{target_booking['id']}/status",
+            json={"status": "confirmed", "note": "Бронь подтверждена отелем"},
+            headers=agency_headers,
+        )
+        assert patch_res.status_code == 200
+        assert patch_res.json()["status"] == "confirmed"
+
+    # 7. Финансовый баланс агентства (10% комиссия)
+    fin_res = client.get("/api/v1/agencies/me/finances", headers=agency_headers)
+    assert fin_res.status_code == 200
+    fin_data = fin_res.json()
+    assert "totalSalesKzt" in fin_data
+    assert "commissionRate" in fin_data
+    assert fin_data["commissionRate"] == 0.10
+    assert "totalCommissionEarned" in fin_data
+    assert "availableBalanceKzt" in fin_data
+
+    # 8. Заявка на вывод средств (если есть доступный баланс)
+    avail = fin_data["availableBalanceKzt"]
+    if avail > 1000:
+        payout_amount = min(50000, avail)
+        payout_res = client.post("/api/v1/agencies/me/payout-request", json={
+            "amount": payout_amount,
+            "iban": "KZ123456789012345678",
+            "bankName": "Kaspi Bank",
+            "comment": "Выплата комиссии за октябрь",
+        }, headers=agency_headers)
+        assert payout_res.status_code == 201
+        payout_data = payout_res.json()
+        assert payout_data["amount"] == payout_amount
+        assert payout_data["status"] == "pending"
+
+    # 9. Удаление созданного тура
+    del_res = client.delete(f"/api/v1/agencies/me/tours/{tour_id}", headers=agency_headers)
+    assert del_res.status_code == 204
+
+
+
 
 
 

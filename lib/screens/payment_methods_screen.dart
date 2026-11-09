@@ -678,54 +678,64 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           width: isSelected ? 1.6 : 1,
         ),
       ),
-      child: ListTile(
-        onTap: () {
-          setState(() => _selectedMethod = id);
-          _saveCards();
-        },
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: iconBg,
-            borderRadius: BorderRadius.circular(10),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: ListTile(
+          onTap: () {
+            setState(() => _selectedMethod = id);
+            _saveCards();
+          },
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: iconText != null
+                ? Text(iconText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20))
+                : Icon(icon, color: Colors.white, size: 20),
           ),
-          child: iconText != null
-              ? Text(iconText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20))
-              : Icon(icon, color: Colors.white, size: 20),
-        ),
-        title: Row(
-          children: [
-            Text(title, style: AppText.sora(size: 14, weight: FontWeight.w700)),
-            if (badge != null) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: (badgeColor ?? AppColors.teal).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+          title: Row(
+            children: [
+              Flexible(
                 child: Text(
-                  badge,
-                  style: TextStyle(color: badgeColor ?? AppColors.teal, fontSize: 10, fontWeight: FontWeight.bold),
+                  title,
+                  style: AppText.sora(size: 14, weight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (badge != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (badgeColor ?? AppColors.teal).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(color: badgeColor ?? AppColors.teal, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
-        subtitle: Text(subtitle, style: AppText.work(size: 11.5, color: AppColors.muted)),
-        trailing: Radio<String>(
-          value: id,
-          groupValue: _selectedMethod,
-          activeColor: AppColors.teal,
-          onChanged: (val) {
-            if (val != null) {
-              setState(() => _selectedMethod = val);
-              _saveCards();
-            }
-          },
+          ),
+          subtitle: Text(subtitle, style: AppText.work(size: 11.5, color: AppColors.muted)),
+          trailing: Radio<String>(
+            value: id,
+            groupValue: _selectedMethod,
+            activeColor: AppColors.teal,
+            onChanged: (val) {
+              if (val != null) {
+                setState(() => _selectedMethod = val);
+                _saveCards();
+              }
+            },
+          ),
         ),
       ),
     );

@@ -4,6 +4,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.audit import mask_card_number, mask_email, mask_phone
+from app.core.totp import (
+    generate_backup_codes,
+    generate_totp_secret,
+    get_totp_code,
+    get_totp_uri,
+    verify_totp_code,
+)
 from app.database import Base, get_db
 from app.main import app
 from app.seed import seed_data
@@ -979,6 +987,154 @@ def test_tickets_search_and_booking_flow():
     assert my_tickets.status_code == 200
     user_bookings = my_tickets.json()
     assert any(b["id"] == booking["id"] for b in user_bookings)
+
+
+# ==================== ЭПИК 12: КИБЕРБЕЗОПАСНОСТЬ (2FA, XSS, AUDIT) ====================
+
+def test_cybersecurity_totp_rfc6238():
+    """Проверка генерации и верификации TOTP по RFC 6238."""
+    secret = generate_totp_secret()
+    assert len(secret) >= 26
+    code = get_totp_code(secret)
+    assert len(code) == 6
+    assert code.isdigit()
+    assert verify_totp_code(secret, code) is True
+
+    wrong_code = "000000" if code != "000000" else "111111"
+    assert verify_totp_code(secret, wrong_code) is False
+
+    uri = get_totp_uri(secret, "admin@sapar.kz", "Sapar")
+    assert uri.startswith("otpauth://totp/Sapar:admin%40sapar.kz?")
+    assert f"secret={secret}" in uri
+
+
+def test_cybersecurity_pii_masking():
+    """Проверка маскирования персональных данных (PII)."""
+    assert mask_email("abylhair.123@gmail.com") == "a***3@gmail.com"
+    assert mask_phone("+7 777 123 4567") == "+7 *** *** 67"
+    assert mask_card_number("4400 1234 5678 9012") == "**** **** **** 9012"
+
+
+def test_cybersecurity_headers():
+    """Проверка наличия стандартизированных OWASP HTTP заголовков безопасности."""
+    res = client.get("/health")
+    assert res.status_code == 200
+    headers = res.headers
+    assert "Strict-Transport-Security" in headers
+    assert "X-Content-Type-Options" in headers
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    assert "X-Frame-Options" in headers
+    assert headers["X-Frame-Options"] == "DENY"
+    assert "X-XSS-Protection" in headers
+    assert "Content-Security-Policy" in headers
+
+
+def test_cybersecurity_xss_sanitization():
+    """Проверка нейтрализации XSS тегов в теле JSON-запросов."""
+    payload = {
+        "email": "xss_safe_user_test@sapar.kz",
+        "password": "Password123!",
+        "fullName": "Алихан <script>alert('XSS Attack')</script> Омаров",
+        "phone": "+7 701 999 8877",
+        "role": "client",
+    }
+    res = client.post("/api/v1/auth/register", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert "<script>" not in data["full_name"]
+    assert "alert('XSS Attack')" not in data["full_name"]
+    assert "Алихан  Омаров" in data["full_name"]
+
+
+def test_cybersecurity_2fa_full_lifecycle():
+    """Полный цикл: логин -> 2FA setup -> verify -> login с 2FA -> disable."""
+    # 1. Логин как админ
+    login_res = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    assert login_res.status_code == 200
+    token = login_res.json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Проверка статуса 2FA
+    status_res = client.get("/api/v1/auth/2fa/status", headers=auth_headers)
+    assert status_res.status_code == 200
+    assert status_res.json()["is_2fa_enabled"] is False
+    assert status_res.json()["is_required_for_role"] is True
+
+    # 3. Настройка 2FA: генерация секрета и резервных кодов
+    setup_res = client.post("/api/v1/auth/2fa/setup", headers=auth_headers)
+    assert setup_res.status_code == 200
+    setup_data = setup_res.json()
+    totp_secret = setup_data["secret"]
+    backup_codes = setup_data["backup_codes"]
+    assert len(backup_codes) == 8
+
+    # 4. Попытка подтверждения с неверным кодом
+    bad_verify = client.post("/api/v1/auth/2fa/verify", json={"code": "000000"}, headers=auth_headers)
+    assert bad_verify.status_code == 400
+
+    # 5. Подтверждение с валидным TOTP кодом
+    valid_code = get_totp_code(totp_secret)
+    good_verify = client.post("/api/v1/auth/2fa/verify", json={"code": valid_code}, headers=auth_headers)
+    assert good_verify.status_code == 200
+    assert good_verify.json()["is_2fa_enabled"] is True
+
+    # 6. Теперь логин требует 2FA!
+    login_2fa_prompt = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    assert login_2fa_prompt.status_code == 200
+    prompt_data = login_2fa_prompt.json()
+    assert prompt_data["status"] == "2fa_required"
+    temp_token = prompt_data["temp_token"]
+
+    # 7. Попытка подтверждения входа неверным кодом
+    bad_login_verify = client.post("/api/v1/auth/2fa/login-verify", json={"temp_token": temp_token, "code": "999999"})
+    assert bad_login_verify.status_code == 400
+
+    # 8. Успешный вход по TOTP коду
+    current_code = get_totp_code(totp_secret)
+    good_login_verify = client.post("/api/v1/auth/2fa/login-verify", json={"temp_token": temp_token, "code": current_code})
+    assert good_login_verify.status_code == 200
+    admin_new_token = good_login_verify.json()["access_token"]
+    new_headers = {"Authorization": f"Bearer {admin_new_token}"}
+
+    # 9. Проверка входа по резервному коду восстановления
+    login_prompt_2 = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    temp_token_2 = login_prompt_2.json()["temp_token"]
+    backup_code_to_use = backup_codes[0]
+    backup_login = client.post("/api/v1/auth/2fa/login-verify", json={"temp_token": temp_token_2, "code": backup_code_to_use})
+    assert backup_login.status_code == 200
+
+    # Использованный резервный код нельзя применить второй раз
+    login_prompt_3 = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    temp_token_3 = login_prompt_3.json()["temp_token"]
+    reuse_backup = client.post("/api/v1/auth/2fa/login-verify", json={"temp_token": temp_token_3, "code": backup_code_to_use})
+    assert reuse_backup.status_code == 400
+
+    # 10. Отключение 2FA с проверкой пароля
+    disable_res = client.post("/api/v1/auth/2fa/disable", json={"password": "Admin123!"}, headers=new_headers)
+    assert disable_res.status_code == 200
+    assert disable_res.json()["is_2fa_enabled"] is False
+
+    # После отключения вход снова прямой
+    direct_login = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    assert "access_token" in direct_login.json()
+
+
+def test_cybersecurity_admin_audit_logs():
+    """Проверка эндпоинта журнала аудита безопасности."""
+    login_res = client.post("/api/v1/auth/login", json={"email": "admin@sapar.kz", "password": "Admin123!"})
+    token = login_res.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/v1/admin/audit-logs", headers=admin_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "items" in data
+    assert data["total"] >= 1
+    first_item = data["items"][0]
+    assert "action" in first_item
+    assert "createdAt" in first_item
+    assert "status" in first_item
+
 
 
 

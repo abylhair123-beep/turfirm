@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.admin.models import FinancialRecord
 from app.admin.schemas import (
+    AuditLogItemResponse,
+    AuditLogListResponse,
     CategoryBreakdown,
     FinancialChartPoint,
     FinancialRecordCreate,
@@ -13,11 +15,13 @@ from app.admin.schemas import (
 )
 from app.auth.models import User
 from app.bookings.models import Booking
+from app.core.audit import AuditLog
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.referrals.models import ReferralPayout
 
 router = APIRouter(prefix="/admin/finances", tags=["Админ-панель: Финансовый баланс"])
+audit_router = APIRouter(prefix="/admin/audit-logs", tags=["Админ-панель: Аудит безопасности"])
 
 
 def _normalize_dt(dt: Optional[datetime]) -> datetime:
@@ -294,4 +298,50 @@ def create_financial_record(
         description=record.description,
         referenceId=record.reference_id,
         createdAt=record.created_at,
+    )
+
+
+# ==================== АУДИТ БЕЗОПАСНОСТИ ====================
+
+@audit_router.get("", response_model=AuditLogListResponse)
+def get_audit_logs(
+    action: Optional[str] = Query(None, description="Фильтр по действию (например LOGIN_SUCCESS, 2FA_ENABLED)"),
+    status: Optional[str] = Query(None, description="Фильтр по статусу (SUCCESS, WARNING, FAILED)"),
+    user_id: Optional[str] = Query(None, description="Фильтр по ID пользователя"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Возвращает журнал аудита безопасности с поддержкой пагинации и фильтрации."""
+    query = db.query(AuditLog)
+    if action:
+        query = query.filter(AuditLog.action == action)
+    if status:
+        query = query.filter(AuditLog.status == status)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
+
+    total = query.count()
+    items = query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit).all()
+
+    return AuditLogListResponse(
+        items=[
+            AuditLogItemResponse(
+                id=item.id,
+                createdAt=item.created_at,
+                userId=item.user_id,
+                userEmail=item.user_email,
+                userRole=item.user_role,
+                ipAddress=item.ip_address,
+                action=item.action,
+                resource=item.resource,
+                status=item.status,
+                details=item.details,
+            )
+            for item in items
+        ],
+        total=total,
+        skip=skip,
+        limit=limit,
     )

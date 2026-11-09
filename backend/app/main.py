@@ -18,13 +18,18 @@ if not _app_logger.handlers:
     _app_logger.setLevel(logging.INFO)
     _app_logger.propagate = False
 
-from app.admin.router import router as admin_router
+from app.admin.router import audit_router, router as admin_router
 from app.agencies.router import router as agencies_router
 from app.auth.router import router as auth_router
 from app.bookings.router import router as bookings_router
+from app.core.audit import AuditLog
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.core.security_middleware import (
+    InputSanitizationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.crm.router import router as crm_router
 from app.database import Base, SessionLocal, engine
 from app.favorites.router import router as favorites_router
@@ -80,6 +85,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+# Кибербезопасность: HSTS, CSP, X-Frame-Options, защита от XSS инъекций
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(InputSanitizationMiddleware)
+
 # CORS configuration
 origins = settings.cors_origins if isinstance(settings.cors_origins, list) else ["*"]
 if "*" in origins:
@@ -109,6 +118,7 @@ app.include_router(search_router, prefix=settings.api_v1_prefix)
 app.include_router(promo_router, prefix=settings.api_v1_prefix)
 app.include_router(referrals_router, prefix=settings.api_v1_prefix)
 app.include_router(admin_router, prefix=settings.api_v1_prefix)
+app.include_router(audit_router, prefix=settings.api_v1_prefix)
 app.include_router(crm_router, prefix=settings.api_v1_prefix)
 app.include_router(tickets_router, prefix=settings.api_v1_prefix)
 

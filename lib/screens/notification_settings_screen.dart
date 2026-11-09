@@ -380,29 +380,33 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: enabled ? AppColors.teal.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: enabled ? AppColors.teal.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: enabled ? AppColors.teal : Colors.grey, size: 20),
           ),
-          child: Icon(icon, color: enabled ? AppColors.teal : Colors.grey, size: 20),
-        ),
-        title: Text(
-          title,
-          style: AppText.sora(size: 13.5, weight: FontWeight.w600, color: enabled ? AppColors.ink : Colors.grey),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: AppText.work(size: 11.5, color: AppColors.muted),
-        ),
-        trailing: Switch.adaptive(
-          value: value,
-          activeColor: AppColors.teal,
-          onChanged: enabled ? onChanged : null,
+          title: Text(
+            title,
+            style: AppText.sora(size: 13.5, weight: FontWeight.w600, color: enabled ? AppColors.ink : Colors.grey),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: AppText.work(size: 11.5, color: AppColors.muted),
+          ),
+          trailing: Switch.adaptive(
+            value: value,
+            activeColor: AppColors.teal,
+            onChanged: enabled ? onChanged : null,
+          ),
         ),
       ),
     );

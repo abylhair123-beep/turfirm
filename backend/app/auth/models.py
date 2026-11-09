@@ -18,6 +18,9 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     is_email_verified = Column(Boolean, default=False, nullable=False)
     is_phone_verified = Column(Boolean, default=False, nullable=False)
+    is_2fa_enabled = Column(Boolean, default=False, nullable=False)
+    totp_secret = Column(String(64), nullable=True)
+    backup_codes = Column(String(512), nullable=True)  # JSON-массив одноразовых кодов
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships

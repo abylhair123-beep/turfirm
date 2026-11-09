@@ -68,3 +68,28 @@ class FinancialSummaryResponse(BaseModel):
     model_config = {
         "populate_by_name": True,
     }
+
+
+class AuditLogItemResponse(BaseModel):
+    id: str
+    created_at: datetime = Field(alias="createdAt")
+    user_id: Optional[str] = Field(default=None, alias="userId")
+    user_email: Optional[str] = Field(default=None, alias="userEmail")
+    user_role: Optional[str] = Field(default=None, alias="userRole")
+    ip_address: Optional[str] = Field(default=None, alias="ipAddress")
+    action: str
+    resource: str
+    status: str
+    details: Optional[str] = None
+
+    model_config = {
+        "populate_by_name": True,
+        "from_attributes": True,
+    }
+
+
+class AuditLogListResponse(BaseModel):
+    items: List[AuditLogItemResponse]
+    total: int
+    skip: int
+    limit: int

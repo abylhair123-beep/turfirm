@@ -1,10 +1,14 @@
+from datetime import datetime, timedelta, timezone
+import json
 import logging
 import random
 import re
-from typing import Optional
+from typing import Optional, Union
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from app.agencies.models import Agency
@@ -19,15 +23,28 @@ from app.auth.schemas import (
     SmsSendOtpResponse,
     SmsVerifyOtpRequest,
     Token,
+    TwoFactorDisableRequest,
+    TwoFactorLoginRequest,
+    TwoFactorRequiredResponse,
+    TwoFactorSetupResponse,
+    TwoFactorStatusResponse,
+    TwoFactorVerifyRequest,
     UserLogin,
     UserRegister,
     UserResponse,
 )
 from app.auth.sms_service import SmsAuthService, normalize_phone
+from app.core.audit import log_audit_event
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.totp import (
+    generate_backup_codes,
+    generate_totp_secret,
+    get_totp_uri,
+    verify_totp_code,
+)
 from app.database import get_db
 from app.dependencies import get_current_user
 
@@ -46,7 +63,15 @@ def _build_token(user: User) -> Token:
         full_name=user.full_name,
         isEmailVerified=user.is_email_verified,
         isPhoneVerified=user.is_phone_verified,
+        is2FaEnabled=user.is_2fa_enabled,
     )
+
+
+def _build_temp_2fa_token(user: User) -> str:
+    """Генерирует временный токен со сроком жизни 5 минут для шага проверки 2FA."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    to_encode = {"sub": str(user.id), "type": "2fa_pending", "exp": expire}
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
@@ -113,22 +138,75 @@ def register(request: Request, user_in: UserRegister, db: Session = Depends(get_
     return _build_token(user)
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Union[Token, TwoFactorRequiredResponse])
 @limiter.limit(settings.rate_limit_auth)
 def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
     clean_email = login_data.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
     user = db.query(User).filter(User.email == clean_email).first()
+
     if not user or not verify_password(login_data.password, user.hashed_password):
+        log_audit_event(
+            db,
+            action="LOGIN_FAILED",
+            resource="auth",
+            user_email=clean_email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"reason": "Invalid credentials"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный email или пароль",
         )
     if not user.is_active:
+        log_audit_event(
+            db,
+            action="LOGIN_BLOCKED",
+            resource="auth",
+            user_id=user.id,
+            user_email=user.email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"reason": "User is inactive"},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Учетная запись отключена. Обратитесь в службу поддержки.",
         )
 
+    # Если включена двухфакторная аутентификация (2FA)
+    if user.is_2fa_enabled:
+        temp_token = _build_temp_2fa_token(user)
+        log_audit_event(
+            db,
+            action="LOGIN_2FA_REQUIRED",
+            resource="auth",
+            user_id=user.id,
+            user_email=user.email,
+            user_role=user.role,
+            ip_address=client_ip,
+            status="WARNING",
+            details={"message": "2FA TOTP code required"},
+        )
+        return TwoFactorRequiredResponse(
+            status="2fa_required",
+            message="Введите 6-значный код двухфакторной аутентификации",
+            temp_token=temp_token,
+            email=user.email,
+            role=user.role,
+        )
+
+    log_audit_event(
+        db,
+        action="LOGIN_SUCCESS",
+        resource="auth",
+        user_id=user.id,
+        user_email=user.email,
+        user_role=user.role,
+        ip_address=client_ip,
+        status="SUCCESS",
+    )
     return _build_token(user)
 
 
@@ -136,8 +214,18 @@ def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)
 @limiter.limit(settings.rate_limit_auth)
 def login_oauth(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     clean_email = form_data.username.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
     user = db.query(User).filter(User.email == clean_email).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        log_audit_event(
+            db,
+            action="LOGIN_FAILED",
+            resource="auth",
+            user_email=clean_email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"endpoint": "oauth-token"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный email или пароль",
@@ -147,6 +235,239 @@ def login_oauth(request: Request, form_data: OAuth2PasswordRequestForm = Depends
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Учетная запись отключена",
         )
+    log_audit_event(
+        db,
+        action="LOGIN_SUCCESS",
+        resource="auth",
+        user_id=user.id,
+        user_email=user.email,
+        user_role=user.role,
+        ip_address=client_ip,
+        status="SUCCESS",
+        details={"endpoint": "oauth-token"},
+    )
+    return _build_token(user)
+
+
+# ==================== ДВУХФАКТОРНАЯ АУТЕНТИФИКАЦИЯ (2FA TOTP) ====================
+
+@router.get("/2fa/status", response_model=TwoFactorStatusResponse)
+def get_2fa_status(current_user: User = Depends(get_current_user)):
+    """Возвращает статус 2FA для текущего пользователя и требование для роли (admin, agency)."""
+    return TwoFactorStatusResponse(
+        is_2fa_enabled=current_user.is_2fa_enabled,
+        is_required_for_role=current_user.role in ("admin", "agency"),
+        role=current_user.role,
+    )
+
+
+@router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
+def setup_2fa(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Генерирует секрет TOTP, URI для сканирования QR-кода и 8 одноразовых резервных кодов."""
+    secret = generate_totp_secret()
+    backup_codes = generate_backup_codes(8)
+
+    current_user.totp_secret = secret
+    current_user.backup_codes = json.dumps(backup_codes)
+    db.commit()
+
+    client_ip = request.client.host if request.client else "unknown"
+    log_audit_event(
+        db,
+        action="2FA_SETUP_INITIATED",
+        resource="auth",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
+        ip_address=client_ip,
+    )
+
+    otpauth_url = get_totp_uri(secret, current_user.email)
+    return TwoFactorSetupResponse(
+        secret=secret,
+        otpauth_url=otpauth_url,
+        backup_codes=backup_codes,
+    )
+
+
+@router.post("/2fa/verify")
+def verify_and_enable_2fa(
+    request: Request,
+    body: TwoFactorVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Подтверждает 6-значный TOTP-код из аутентификатора и включает 2FA в аккаунте."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not current_user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Сначала инициализируйте настройку 2FA через POST /auth/2fa/setup",
+        )
+
+    if not verify_totp_code(current_user.totp_secret, body.code):
+        log_audit_event(
+            db,
+            action="2FA_ENABLE_FAILED",
+            resource="auth",
+            user_id=current_user.id,
+            user_email=current_user.email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"code": "[REDACTED]"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный 6-значный код подтверждения",
+        )
+
+    current_user.is_2fa_enabled = True
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="2FA_ENABLED",
+        resource="auth",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
+        ip_address=client_ip,
+        status="SUCCESS",
+    )
+    return {
+        "status": "ok",
+        "message": "Двухфакторная аутентификация (2FA) успешно активирована",
+        "is_2fa_enabled": True,
+    }
+
+
+@router.post("/2fa/disable")
+def disable_2fa(
+    request: Request,
+    body: TwoFactorDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Отключает 2FA после обязательной проверки пароля текущего пользователя."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not verify_password(body.password, current_user.hashed_password):
+        log_audit_event(
+            db,
+            action="2FA_DISABLE_FAILED",
+            resource="auth",
+            user_id=current_user.id,
+            user_email=current_user.email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"reason": "Incorrect password"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный пароль. Для отключения 2FA требуется подтверждение пароля.",
+        )
+
+    current_user.is_2fa_enabled = False
+    current_user.totp_secret = None
+    current_user.backup_codes = None
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="2FA_DISABLED",
+        resource="auth",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
+        ip_address=client_ip,
+        status="WARNING",
+    )
+    return {
+        "status": "ok",
+        "message": "Двухфакторная аутентификация успешно отключена",
+        "is_2fa_enabled": False,
+    }
+
+
+@router.post("/2fa/login-verify", response_model=Token)
+@limiter.limit(settings.rate_limit_auth)
+def verify_2fa_login(
+    request: Request,
+    body: TwoFactorLoginRequest,
+    db: Session = Depends(get_db),
+):
+    """Обменивает временный temp_token и 6-значный код TOTP (или 8-значный резервный код) на полноценный JWT."""
+    client_ip = request.client.host if request.client else "unknown"
+    try:
+        payload = jwt.decode(body.temp_token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "2fa_pending":
+            raise ValueError("Invalid token type")
+        user_id = payload.get("sub")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Срок действия временного токена 2FA истёк или токен недействителен. Повторите вход.",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден или заблокирован",
+        )
+
+    code = body.code.strip()
+    is_valid = False
+    used_backup = False
+
+    # 1. Проверка 6-значного кода TOTP
+    if len(code) == 6 and code.isdigit() and user.totp_secret:
+        if verify_totp_code(user.totp_secret, code):
+            is_valid = True
+
+    # 2. Проверка 8-значного резервного кода восстановления
+    if not is_valid and user.backup_codes:
+        try:
+            codes = json.loads(user.backup_codes)
+            if code in codes:
+                is_valid = True
+                used_backup = True
+                codes.remove(code)
+                user.backup_codes = json.dumps(codes)
+                db.commit()
+        except Exception:
+            pass
+
+    if not is_valid:
+        log_audit_event(
+            db,
+            action="LOGIN_2FA_FAILED",
+            resource="auth",
+            user_id=user.id,
+            user_email=user.email,
+            ip_address=client_ip,
+            status="FAILED",
+            details={"used_backup_code": False},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный код двухфакторной аутентификации или резервный код",
+        )
+
+    log_audit_event(
+        db,
+        action="LOGIN_2FA_SUCCESS",
+        resource="auth",
+        user_id=user.id,
+        user_email=user.email,
+        user_role=user.role,
+        ip_address=client_ip,
+        status="SUCCESS",
+        details={"used_backup_code": used_backup},
+    )
     return _build_token(user)
 
 

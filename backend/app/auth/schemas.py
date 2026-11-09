@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -34,8 +34,42 @@ class Token(BaseModel):
     full_name: str
     is_email_verified: bool = Field(default=False, alias="isEmailVerified")
     is_phone_verified: bool = Field(default=False, alias="isPhoneVerified")
+    is_2fa_enabled: bool = Field(default=False, alias="is2FaEnabled")
 
     model_config = {"populate_by_name": True}
+
+
+class TwoFactorRequiredResponse(BaseModel):
+    status: str = "2fa_required"
+    message: str
+    temp_token: str
+    email: str
+    role: str
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+    backup_codes: List[str]
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    code: str = Field(description="6-значный TOTP код из приложения аутентификатора")
+
+
+class TwoFactorDisableRequest(BaseModel):
+    password: str = Field(description="Текущий пароль для подтверждения отключения 2FA")
+
+
+class TwoFactorLoginRequest(BaseModel):
+    temp_token: str = Field(description="Временный токен, выданный при логине")
+    code: str = Field(description="6-значный TOTP код или 8-значный резервный код")
+
+
+class TwoFactorStatusResponse(BaseModel):
+    is_2fa_enabled: bool
+    is_required_for_role: bool
+    role: str
 
 
 class TokenPayload(BaseModel):
@@ -48,6 +82,7 @@ class UserResponse(UserBase):
     is_active: bool
     is_email_verified: bool = Field(default=False, alias="isEmailVerified")
     is_phone_verified: bool = Field(default=False, alias="isPhoneVerified")
+    is_2fa_enabled: bool = Field(default=False, alias="is2FaEnabled")
     created_at: datetime
 
     model_config = {

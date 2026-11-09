@@ -436,29 +436,33 @@ class _SupportCareScreenState extends State<SupportCareScreen> with SingleTicker
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 22),
           ),
-          child: Icon(icon, color: iconColor, size: 22),
-        ),
-        title: Text(title, style: AppText.sora(size: 14, weight: FontWeight.w700)),
-        subtitle: Text(subtitle, style: AppText.work(size: 12, color: AppColors.muted)),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.teal.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            actionLabel,
-            style: const TextStyle(color: AppColors.teal, fontSize: 11.5, fontWeight: FontWeight.bold),
+          title: Text(title, style: AppText.sora(size: 14, weight: FontWeight.w700)),
+          subtitle: Text(subtitle, style: AppText.work(size: 12, color: AppColors.muted)),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.teal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              actionLabel,
+              style: const TextStyle(color: AppColors.teal, fontSize: 11.5, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
       ),
